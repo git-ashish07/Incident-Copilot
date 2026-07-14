@@ -10,9 +10,9 @@
 |---|------|-------------|--------|----------|
 | 1 | Kickoff: assign roles, review requirements.md and Alex Kim's persona/objective, agree on tech stack | Ashish/Kartik/Pratik | Done | Held kickoff call; reviewed requirements.md and Week 1 tasks; roles and ownership split across Ashish, Kartik, and Pratik. |
 | 2 | Set up the git repository: initialize repo, agree on branch strategy, add .gitignore, write a README | Ashish | Done | Done, shared the repo with the group |
-| 3 | Draft the system prompt: triage-copilot tone and the "no autonomous production actions" rule | Pratik/Ashish | In Progress | |
-| 4 | Generate a synthetic dataset of past-incident logs, postmortems, and time-series metrics data | Pratik | | |
-| 5 | Collect sample runbooks, postmortems, and code docs for the RAG corpus | Pratik/Kartik | | |
+| 3 | Draft the system prompt: triage-copilot tone and the "no autonomous production actions" rule | Pratik/Ashish | Done | |
+| 4 | Generate a synthetic dataset of past-incident logs, postmortems, and time-series metrics data | Pratik/Ashish | In Progress | |
+| 5 | Collect sample runbooks, postmortems, and code docs for the RAG corpus | Pratik/Ashish | In Progress | |
 | 6 | Build the ingestion pipeline: chunk and embed the runbook/postmortem docs into a vector store | Pratik/Ashish/Kartik | | All three contributing — treating this as a shared learning task to build hands-on familiarity with the pipeline. |
 | 7 | Implement retrieval and test against "connection-pool exhaustion runbook" | | | |
 | 8 | Wire a minimal prototype: incident description → triage summary (no tools yet) | | | |

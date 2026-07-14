@@ -1,0 +1,75 @@
+{
+  "incidents": [
+    {
+      "incident_id": "INC-1001",
+      "service": "payments-service",
+      "title": "Connection pool exhaustion causing payment timeouts",
+      "status": "resolved",
+      "severity": "high",
+      "start_time": "2026-04-10T03:12:00Z",
+      "end_time": "2026-04-10T04:05:00Z",
+      "symptoms": [
+        "p95 latency on payments-service jumped from ~150ms to >4000ms",
+        "Error rate rose from 0.3% to 22%",
+        "Logs flooded with ConnectionPoolTimeoutException: Timeout waiting for connection from pool"
+      ],
+      "root_cause": "A retry-storm from the checkout-service during a downstream card-processor slowdown held DB connections open longer than expected, exhausting the payments-service connection pool (max=100).",
+      "resolution": "Restarted the payments-service pods to release stuck connections, then shipped a fix that added a connection checkout timeout and capped retry attempts. Pool size was later increased from 100 to 150 as a buffer.",
+      "related_deploy": null,
+      "postmortem_file": "src/data/corpus/postmortems/INC-1001-payments-connection-pool-exhaustion.md",
+      "matches_query": "Sample query 2 & 3 in requirements.md ('has this happened before' / connection-pool exhaustion runbook)"
+    },
+    {
+      "incident_id": "INC-1002",
+      "service": "checkout-service",
+      "title": "Latency regression after deploy v2.1.0",
+      "status": "resolved",
+      "severity": "high",
+      "start_time": "2026-05-22T14:40:00Z",
+      "end_time": "2026-05-22T15:10:00Z",
+      "symptoms": [
+        "p95 latency on checkout-service jumped ~5x within 10 minutes of deploying v2.1.0",
+        "Error rate rose from 0.4% to 9%",
+        "No infrastructure alerts fired; correlated tightly with deploy timestamp"
+      ],
+      "root_cause": "v2.1.0 introduced a synchronous call to a new fraud-scoring endpoint on the request hot path, which added ~600ms of blocking latency per checkout request.",
+      "resolution": "On-call engineer rolled back to v2.0.9 via the standard human-approved rollback process. Latency and error rate returned to baseline within 5 minutes of rollback completing.",
+      "related_deploy": "v2.1.0",
+      "postmortem_file": "src/data/corpus/postmortems/INC-1002-checkout-deploy-latency-regression.md",
+      "matches_query": "Sample query 1 & 4 in requirements.md (latency spike triage / rollback refusal)"
+    },
+    {
+      "incident_id": "INC-1003",
+      "service": "auth-service",
+      "title": "Cache stampede after cache-node failover",
+      "status": "resolved",
+      "severity": "medium",
+      "start_time": "2026-06-30T09:05:00Z",
+      "end_time": "2026-06-30T09:40:00Z",
+      "symptoms": [
+        "auth-service p95 latency doubled from ~80ms to ~170ms",
+        "Redis CPU utilization spiked to 95%+",
+        "Elevated 5xx rate on login endpoint (~4%)"
+      ],
+      "root_cause": "A cache node failover caused a large fraction of session-lookup keys to expire simultaneously, triggering a thundering-herd of cache-miss lookups against the primary DB.",
+      "resolution": "Enabled request coalescing (single-flight) for session lookups and staggered cache TTLs to avoid synchronized expiry.",
+      "related_deploy": null,
+      "postmortem_file": "src/data/corpus/postmortems/INC-1003-auth-service-cache-stampede.md",
+      "matches_query": "Background corpus depth; not required by any single sample query"
+    }
+  ],
+  "current_incident_context": {
+    "note": "This represents the LIVE, unresolved incident Alex Kim is paging in about (2026-07-14, ~02:00Z). It intentionally has no postmortem yet -- that's what the copilot is helping triage.",
+    "service": "checkout-service",
+    "observed_at": "2026-07-14T02:15:00Z",
+    "deploy": {
+      "version": "v2.4.1",
+      "deployed_at": "2026-07-14T01:55:00Z"
+    },
+    "symptoms": [
+      "p95 latency on checkout-service spiked ~5x starting ~02:00Z, roughly 5 minutes after v2.4.1 deployed",
+      "Error rate climbing, currently ~7% and rising",
+      "Timeline strongly resembles INC-1002 (deploy-caused latency regression)"
+    ]
+  }
+}

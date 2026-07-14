@@ -43,7 +43,17 @@ incident-copilot/
 ├── .python-version
 ├── src/
 │   ├── data/
-│   │   └── sample_incident_queries.py   # Sample queries for dry runs
+│   │   ├── data_overview.md             # Plain-language guide to everything below
+│   │   ├── sample_incident_queries.py   # Sample queries for dry runs
+│   │   ├── incidents/
+│   │   │   └── incidents.json           # Past-incident records + live incident context
+│   │   ├── metrics/                     # Synthetic time-series metrics (CSV)
+│   │   ├── logs/                        # Synthetic raw log excerpts
+│   │   └── corpus/                      # RAG corpus (ingested in Week 1, Task 6-7)
+│   │       ├── runbooks/                # Step-by-step incident-response docs
+│   │       ├── postmortems/             # Past-incident write-ups
+│   │       ├── code_docs/               # Service architecture notes
+│   │       └── sources.md               # Source list + sample-query coverage
 │   ├── llm_funcs/
 │   │   └── llm_config.py                # LLM instance configuration
 │   ├── prompts/
