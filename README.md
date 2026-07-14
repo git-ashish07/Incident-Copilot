@@ -31,23 +31,6 @@ An AI-powered incident-response copilot that helps on-call engineers triage prod
 
 ---
 
-## Tech Stack
-
-| Area             | Technology              |
-|------------------|-------------------------|
-| Language         | Python 3.11+            |
-| LLM / Model      | Groq Cloud              |
-| RAG / Vector Store | ChromaDB / FAISS / Qdrant |
-| UI               | Gradio                  |
-| Framework        | TBD                     |
-| Memory           | TBD                     |
-| MCP / Tools      | TBD                     |
-| Guardrails       | TBD                     |
-| Caching          | TBD                     |
-| Observability    | TBD                     |
-
----
-
 ## Project Structure
 
 ```
@@ -103,3 +86,20 @@ To add a new library:
 ```bash
 uv add <package-name>
 ```
+
+---
+
+## Tech Stack
+
+| Area             | Technology              |
+|------------------|-------------------------|
+| Language         | Python 3.11+            |
+| LLM / Model      | Groq Cloud              |
+| RAG / Vector Store | ChromaDB / FAISS / Qdrant |
+| UI               | Gradio                  |
+| Framework        | TBD                     |
+| Memory           | TBD                     |
+| MCP / Tools      | TBD                     |
+| Guardrails       | TBD                     |
+| Caching          | TBD                     |
+| Observability    | TBD                     |
