@@ -3,12 +3,15 @@ import os
 
 curr_dir = os.getcwd()
 print("Current directory: ", curr_dir)
-root_dir = os.path.dirname(os.path.abspath(__file__))  # resolves to Incident-Copilot/
-if os.path.abspath(curr_dir) != root_dir:
-    os.chdir(root_dir)
-    print("Changed to Root directory: ", os.getcwd())
+
+if curr_dir.split(os.sep)[-1] == "Incident-Copilot":
+    print("Already Root directory, current directory: ", curr_dir)
 else:
-    print("Already in Root directory: ", curr_dir)
+    while curr_dir.split(os.sep)[-1] != "Incident-Copilot":
+        os.chdir("..")
+        curr_dir = os.getcwd()
+
+    print("Changed to Root directory: ", curr_dir)
 
 
 # importing llm related functions
