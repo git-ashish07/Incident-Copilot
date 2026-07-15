@@ -4,6 +4,34 @@ A running log of changes made to this repo — organized by date and author so a
 
 ---
 
+## 2026-07-15 — Ashish Rathore
+
+### Reformatted and standardised all corpus documents the format and pattern followed in real world
+Rewrote all runbooks, postmortems, and code docs to use a consistent structure so they read like real production docs and embed better into the RAG pipeline.
+
+**What changed across all documents:**
+- Added a `| Field | Value |` metadata table at the top of every file (owner, severity, escalation channel, last reviewed, etc.)
+- Standardised section headings across all runbooks: Overview → Symptoms → Diagnosis → Mitigation → Prevention → Related Runbooks
+- Replaced hardcoded file-path cross-references (e.g. `see connection-pool-exhaustion.md`) with plain document names
+- Removed "Reference Incident" sections from runbooks (incident data is now in postmortems, not repeated in runbooks)
+
+**Postmortems** — added `Lessons Learned` sections and converted action-item bullet lists to tables with owner and status columns
+
+**Code docs** — restructured from "key components / known sensitivities" format to: Description → Dependencies → API → Configuration → Operational Notes → Related Runbooks
+
+**`src/data/data_overview.md`** — rewrote to explain the Week 1 / Week 2 split clearly: `corpus/` is what the RAG pipeline uses; `incidents/`, `metrics/`, and `logs/` are reserved for Week 2 tools/memory work. Added a field-by-field explanation of the metadata table headers used across all corpus docs.
+
+**`src/data/corpus/sources.md`** — updated descriptions and sample-query coverage table to match the revised documents
+
+---
+
+## 2026-07-14 — Ashish Rathore
+
+### Added `change-log.md` to track changes and progress
+- Created `change-log.md` (this file) to provide a human-readable history of repo changes, organized by date and author
+
+---
+
 ## 2026-07-14 — Ashish Rathore
 
 ### Added synthetic dataset and RAG corpus (Task 4 & 5)

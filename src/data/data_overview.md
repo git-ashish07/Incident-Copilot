@@ -3,67 +3,67 @@
 Plain-language guide to everything in `src/data/`. Everything here is fake
 (synthetic) data made up for this project — no real production data.
 
-## Folders
+## `corpus/` — what Week 1's RAG pipeline is built on
 
-### `incidents/incidents.json`
-A list of past incidents that "happened" before, written as structured data
-(JSON). Think of it as the incident database. Each entry has: what service broke,
-when, what the symptoms were, what caused it, and how it was fixed. Also
-includes a `current_incident_context` block describing the live incident Alex
-Kim (our persona) is paging about right now — this one has no fix yet, since
-it's what the copilot is meant to help triage.
-
-This will be used later (Week 2) to power "has this happened before?" memory
-recall.
-
-### `metrics/`
-CSV files with fake time-series numbers — latency, error rate, requests per
-second — for two services (`checkout-service`, `payments-service`). Each file
-shows normal/baseline numbers, then a spike matching one of the incidents
-above. This simulates what a real monitoring dashboard (like Datadog/Grafana)
-would show.
-
-### `logs/`
-Small text files with fake raw log lines (the kind of thing you'd see in a
-terminal) showing errors during an incident — e.g. connection timeout errors,
-request timeouts. Used to make the "log query" tool (Week 2) feel real.
-
-### `corpus/`
-The document collection that will be fed into the RAG pipeline (Week 1, Task
-6-7) so the copilot can search and cite them. This is what the agent "reads"
-to answer questions.
+The document collection that gets chunked and embedded in the RAG pipeline
+(Week 1, Task 6-7), so the copilot can search and cite them. This is what the
+agent "reads" to answer questions, and it's self-contained — no document in
+here links out to `incidents/`, `metrics/`, or `logs/` (see below).
 
 - **`corpus/runbooks/`** — step-by-step instructions for handling specific
   problems (e.g. "here's exactly what to do if the DB connection pool is
-  exhausted"). These are the docs the copilot quotes when it says "the runbook
-  says to do X."
-- **`corpus/postmortems/`** — write-ups of past incidents (same incidents as in
-  `incidents.json`, but written as readable reports instead of structured
-  data). Used both for RAG search and as the source of the "similar past
-  incident" memory recall.
-- **`corpus/code_docs/`** — short docs explaining how each service is built
-  (e.g. connection pool size, retry settings), so the copilot has some
-  background context when reasoning about a service.
-- **`corpus/sources.md`** — a checklist showing which document answers which of
-  the 6 sample questions from `docs/requirements.md`. Useful to confirm nothing
-  is missing.
+  exhausted"), formatted the way a real production runbook would be: an
+  owner/severity metadata table up top, then Overview → Symptoms → Diagnosis
+  → Mitigation → Prevention. These are the docs the copilot quotes when it
+  says "the runbook says to do X."
+- **`corpus/postmortems/`** — write-ups of past incidents, formatted like a
+  real SRE postmortem: metadata table, Summary, Impact, Detection, Root
+  Cause, Resolution, Timeline, Action Items, Lessons Learned. These are what
+  the copilot searches for "has this happened before?"
+- **`corpus/code_docs/`** — short service docs (owner, dependencies,
+  configuration, operational notes) giving the copilot background context on
+  how a service is built, similar to a real service catalog entry.
+- **`corpus/sources.md`** — a checklist showing which document answers which
+  of the 6 sample questions from `docs/requirements.md`. Useful to confirm
+  nothing is missing.
+
+## Metadata Table Fields
+
+Every runbook, postmortem, and code doc starts with a `| Field | Value |`
+table. Here's what each field means:
+
+| Field | Meaning |
+|---|---|
+| **Owner** / **Owner Team** | The team responsible for keeping this doc accurate (usually also the team that owns the underlying service). |
+| **Last Reviewed** | The date someone last checked this doc still reflects reality. Docs go stale as systems change, so teams track this to know if it's trustworthy. |
+| **Severity** | How serious this incident (or type of incident) typically is, on a standard scale: Sev-1 = critical/outage, Sev-2 = high impact, Sev-3 = moderate. Helps responders gauge urgency at a glance. |
+| **Services** | Which service(s) the runbook applies to, or the incident affected. |
+| **Escalation Channel** | The Slack/paging channel to notify or escalate to if you're handling this and need help. (Named "On-call" in some real orgs — we use "Escalation Channel" here since it's clearer.) |
+| **Tier** (code docs only) | How critical the service is to the business. Tier-1 usually means "if this breaks, it's a major incident" (e.g. checkout, payments); lower tiers matter less if they go down. |
+| **Status** (postmortems only) | Whether the postmortem write-up itself is finished (`Final`) or still being drafted/reviewed (`Draft`) — this describes the document, not the incident. |
+| **Incident ID** (postmortems only) | The unique tracking number for that incident (e.g. `INC-1001`), so it can be referenced elsewhere without repeating the full title. |
+| **Authors** (postmortems only) | Who wrote the postmortem — typically the on-call engineer(s) who handled the incident, since they have firsthand context. |
+| **Date** (postmortems only) | When the incident happened. |
+| **Duration** (postmortems only) | How long the incident lasted, start to resolution. |
 
 ## The Core Example: Connection-Pool Exhaustion
 
-This is the scenario the project explicitly requires we cover. The trail
-looks like this:
-1. `incidents/incidents.json` → entry `INC-1001` (payments-service, 2026-04-10)
-2. `logs/payments-service_2026-04-10.log` → the actual error lines from that incident
-3. `metrics/payments-service_metrics.csv` → the latency/error spike as numbers
-4. `corpus/postmortems/INC-1001-payments-connection-pool-exhaustion.md` → the write-up
-5. `corpus/runbooks/connection-pool-exhaustion.md` → the steps to follow when this happens
+The scenario the project explicitly requires we cover:
+1. `corpus/postmortems/INC-1001-payments-connection-pool-exhaustion.md` — the write-up
+2. `corpus/runbooks/connection-pool-exhaustion.md` — the steps to follow when this happens
 
-## The Live Example: Checkout Latency Spike
+## Other Folders (not part of Week 1 RAG — reserved for Week 2)
 
-This is the incident Alex Kim is actively being paged about (used to test
-queries 1, 4, and 6 from requirements.md — latency triage, rollback refusal,
-hotfix refusal):
-1. `incidents/incidents.json` → `current_incident_context` block (checkout-service, deploy v2.4.1)
-2. `logs/checkout-service_2026-07-14.log` and `metrics/checkout-service_metrics.csv` → the live spike
-3. Closest past match: `INC-1002` (a similar deploy-caused latency spike) — this is what "has this happened before?" should surface
-4. Relevant runbooks: `high-latency-triage.md`, `deploy-rollback-procedure.md`, `hotfix-and-production-change-policy.md`
+These exist already so Week 2 (tools/memory) has real data to build against,
+but they are **not** wired into the corpus or referenced by it yet.
+
+- **`incidents/incidents.json`** — a structured (JSON) incident database:
+  what broke, when, root cause, resolution. Will power the "has this happened
+  before?" memory feature in Week 2.
+- **`metrics/`** — CSV time-series numbers (latency, error rate, requests/sec)
+  simulating a monitoring dashboard. Will back the `query_logs`/metrics tool
+  in Week 2.
+- **`logs/`** — small text files of fake raw log lines. Also for the Week 2
+  log-query tool.
+
+If you're building the Week 1 RAG pipeline, you only need `corpus/`.
