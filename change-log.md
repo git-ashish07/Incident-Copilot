@@ -4,6 +4,33 @@ A running log of changes made to this repo — organized by date and author so a
 
 ---
 
+## 2026-07-15 — Kartik
+
+### Structure-sequencing decision + doc freshness pass, ahead of Tasks 6/7/9
+- Reviewed an external AI-agent project template against IncidentPilot's actual requirements; adopted the layer-based `src/` organizing principle but rejected scaffolding empty `agent/`/`guardrails/`/`tools/`/`observability/` folders ahead of the weeks that need them — logged as `docs/decision-log.md` ADR-10.
+- Decided the target structure will be reached incrementally: each folder gets created only when its first real file is written, sized to exactly what that task needs.
+- Refreshed "last updated"/"as of" stamps on the living-status docs (`current-project-working-structure-design.md`, `enterprise-level-architecture-design.md`, `week1-task-status.md`) to reflect today's review. Historical dates in this changelog and in `decision-log.md`'s existing ADR entries were deliberately left untouched — they record when things actually happened, not when they were last read.
+- No code changed. Next up: Task 6 (`src/retrieval/ingest.py`) and Task 7 (`src/retrieval/retriever.py`), per ADR-10's scoped plan.
+
+---
+
+## 2026-07-14 — Kartik
+
+### Architecture review, Week 1 status audit, and system-prompt hardening
+- **Architecture documentation** added under `docs/`:
+  - `current-project-working-structure-design.md` — as-is vs. target-state HLD of the whole system, cross-checked against actual repo contents rather than the task plan alone
+  - `enterprise-level-architecture-design.md` — leadership-facing delivery roadmap, one diagram per week, mapped to `requirements.md` and `tasks.md`
+  - `week1-task-status.md` — task-by-task Week 1 status audited against real repo state (not just the `team-assignments.md` tracker, which was found to be stale for Tasks 4/5)
+  - `decision-log.md` — new running ADR-style log for architecture/design decisions (see below)
+- **System prompt hardened** (Task 3, scoped to not pull in later-week work):
+  - `src/prompts/system_prompts.py` — added a citation contract (confirmed facts must cite the `[RETRIEVED CONTEXT]` block by source name), split grounding rules from escalation rules into their own sections, added three worked examples (confirmed/possible, refusal, escalation), reworded `CONSTRAINTS` so it no longer implies the prompt alone enforces the no-execution rule
+  - `src/prompts/prompt_template.py` — added a `{retrieved_context}` slot and `NO_CONTEXT_PLACEHOLDER` constant, ready for Tasks 6-7 (retrieval) to populate
+  - `main.py` — updated to pass the placeholder so the existing round trip keeps running; verified the template still renders correctly
+  - Deliberately deferred: prompt-injection guard wording (no retrieved content exists yet to protect) and a prompt-version identifier (belongs to Task 24, observability)
+- No changes to retrieval, tools, guardrails, or UI — Tasks 6, 7, and 9 are still outstanding, per `week1-task-status.md`.
+
+---
+
 ## 2026-07-14 — Ashish Rathore
 
 ### Added synthetic dataset and RAG corpus (Task 4 & 5)

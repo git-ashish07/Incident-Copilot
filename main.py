@@ -16,7 +16,7 @@ from src.llm_funcs.llm_config import llm_instance
 
 # importing prompt related functions
 from src.prompts.system_prompts import incident_system_prompt
-from src.prompts.prompt_template import get_incident_prompt_template
+from src.prompts.prompt_template import get_incident_prompt_template, NO_CONTEXT_PLACEHOLDER
 from src.data.sample_incident_queries import queries
 
 # importing dotenv to load environment variables
@@ -41,7 +41,12 @@ def main():
         incident_chain = incident_prompt_template | llm
 
         # Generate a response from the LLM
-        incident_response = incident_chain.invoke({"incident_query": incident_query}).content
+        # NOTE: retrieved_context is a placeholder until Week 1 Tasks 6-7
+        # (ingestion + retrieval) are implemented.
+        incident_response = incident_chain.invoke({
+            "incident_query": incident_query,
+            "retrieved_context": NO_CONTEXT_PLACEHOLDER,
+        }).content
 
         # Print the response
         print("\nLLM Response:\n", incident_response)
