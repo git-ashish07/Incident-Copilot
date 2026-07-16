@@ -1,4 +1,7 @@
+import os
+import time
 from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
 
 def llm_instance(api_key: str, model_name: str = "llama-3.3-70b-versatile", temperature: float = 0.0) -> ChatGroq:
     """
@@ -17,3 +20,14 @@ def llm_instance(api_key: str, model_name: str = "llama-3.3-70b-versatile", temp
         api_key=api_key,
         temperature=temperature,
     )
+
+def embedding_instance(model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> HuggingFaceEmbeddings:
+    """
+    Set up the embedding model with the provided model name.
+
+    Args:
+        model_name (str): The name of the embedding model to use. Default is "sentence-transformers/all-MiniLM-L6-v2".
+    Returns:
+        HuggingFaceEmbeddings: An instance of the HuggingFaceEmbeddings class.
+    """
+    return HuggingFaceEmbeddings(model_name=model_name)
