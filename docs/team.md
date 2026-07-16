@@ -14,11 +14,11 @@
 
 ---
 
-### [Name]
-- **Role:**
+### Pratik Desai
+- **Role:** Software Engineer
 - **Tech Stack:**
-- **Confirmed reading requirements.md:**
-- **Strengths / Team can rely on me for:**
+- **Confirmed reading requirements.md:** Yes
+- **Strengths / Team can rely on me for:** LLM integration, RAG pipeline design, agentic workflows, Software devlopment, Production ready softwares 
 
 ---
 
