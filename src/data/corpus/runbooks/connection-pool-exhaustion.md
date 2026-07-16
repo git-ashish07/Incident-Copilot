@@ -1,30 +1,51 @@
 # Runbook: Database Connection Pool Exhaustion
 
-**Applies to:** Any service backed by a pooled DB connection (e.g. payments-service, checkout-service).
+| Field | Value |
+|---|---|
+| Owner | Platform Engineering |
+| Last Reviewed | 2026-06-01 |
+| Severity | Sev-2 (High) |
+| Services | payments-service, checkout-service, any pooled-DB-backed service |
+| Escalation Channel | #platform-oncall |
 
-**Symptoms that indicate this runbook:**
+## Overview
+This runbook covers the case where a service's database connection pool fills
+up and stops handing out connections, causing requests to queue, time out, or
+fail outright.
+
+## Symptoms That Indicate This Runbook
 - `ConnectionPoolTimeoutException` (or equivalent) appearing in service logs
-- `db_pool_active_connections` metric at or near the configured max
+- The pool's active-connection count sitting at or near its configured max
 - p95/p99 latency spiking sharply while request volume stays flat or drops
 - Error rate rising in step with the latency spike
 
-## Diagnostic Steps
-1. Confirm the pool is actually saturated: check the `db_pool_active_connections` metric against the configured `max` for the affected service. If active == max, this is very likely pool exhaustion.
-2. Check for a slow downstream dependency (DB itself, or an upstream the DB-backed call depends on) — a slowdown there is the most common trigger, since it makes each connection get held longer than normal.
-3. Check for a retry storm: look at logs from calling services for repeated retries against the affected service in the same window. Retries amplify pool pressure and can turn a minor slowdown into full exhaustion.
-4. Note the time the pool first hit max — this is your incident start time for correlation with deploys or upstream incidents.
+## Diagnosis
+1. Confirm the pool is actually saturated: check active connections against
+   the configured max for the affected service. If active == max, this is
+   very likely pool exhaustion.
+2. Check for a slow downstream dependency (the database itself, or something
+   the DB-backed call depends on) — a slowdown there is the most common
+   trigger, since it makes each connection get held longer than normal.
+3. Check for a retry storm: look for repeated retries from calling services
+   against the affected service in the same window. Retries amplify pool
+   pressure and can turn a minor slowdown into full exhaustion.
+4. Note the time the pool first hit max — this is your incident start time
+   for correlating against recent deploys or upstream incidents.
 
-## Mitigation Steps (require human execution — the copilot will not perform these)
-1. Restart the affected service's pods/instances to force-release stuck connections. This is the fastest way to recover availability.
-2. If a retry storm from a caller is confirmed, ask that team to pause or throttle retries while the pool recovers.
-3. Once stable, consider a temporary pool size increase only as a stop-gap — it does not fix the underlying cause.
+## Mitigation
+1. Restart the affected service's pods/instances to force-release stuck
+   connections. This is the fastest way to recover availability.
+2. If a retry storm from a caller is confirmed, ask that team to pause or
+   throttle retries while the pool recovers.
+3. Once stable, a temporary pool size increase can be used as a stop-gap — it
+   does not fix the underlying cause and should not be treated as the fix.
 
-## Follow-up (post-incident, not urgent)
-1. Add or verify a connection checkout timeout so a single slow request cannot hold a connection indefinitely.
+## Prevention / Follow-up
+1. Add or verify a connection checkout timeout so a single slow request cannot
+   hold a connection indefinitely.
 2. Add exponential backoff and a retry cap on calling services.
-3. Add an alert for pool utilization crossing 80% of max, so this is caught before full exhaustion.
+3. Add an alert for pool utilization crossing 80% of max, so this is caught
+   before full exhaustion.
 
-## Reference Incident
-INC-1001 (2026-04-10, payments-service) matched this exact pattern: card-processor
-slowdown + checkout-service retry storm exhausted a 100-connection pool in under
-20 minutes. See `src/data/corpus/postmortems/INC-1001-payments-connection-pool-exhaustion.md`.
+## Related Runbooks
+- General High-Latency Triage
