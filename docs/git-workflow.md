@@ -27,6 +27,35 @@ Everyone commits directly to `dev` — there's no branch-per-task or PR review s
 
 ---
 
+## Quick reference — every push, step by step
+
+The literal command sequence behind the core loop above. Copy-paste this for any task:
+
+```bash
+# 1. Pull first — check nothing new landed since you last synced
+git pull origin dev
+
+# 2. Confirm what's changed and staged
+git status
+
+# 3. Stage the file(s) you actually touched
+git add (filename)
+
+# 4. Commit with a message describing the actual change
+git commit -m "describe what changed and why, not just which file"
+
+# 5. Pull again right before pushing — catch anything that landed
+#    while you were working
+git pull origin dev
+
+# 6. Push
+git push origin dev
+```
+
+If step 5 pulls in new commits, re-run step 2 before pushing — make sure nothing conflicted and your change still makes sense on top of what came in.
+
+---
+
 ## Not all conflicts are equal — know which kind you're looking at
 
 **Cheap conflicts (expected, no need to be careful):** append-only docs like `change-log.md` and `docs/decision-log.md`. If two people add an entry at the top of the file in the same session, that's a conflict, but the fix is always "keep both entries, reorder them" — never pick one and discard the other's work.
