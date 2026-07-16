@@ -175,3 +175,18 @@ Each entry: **Status**, **Date**, **Context**, **Decision**, **Alternatives Cons
 - *Stand up a formal `tests/` suite alongside Task 7* — deferred; Task 7's own evidence bar is a logged query + retrieved-chunk judgment, not automated tests. Formal test infrastructure is Task 25 (Week 4 eval harness) scope.
 
 **Consequences:** The target structure from `current-project-working-structure-design.md` is still the destination, but it's reached incrementally, with each folder's existence always backed by real code — never speculative. Revisit if a folder ends up empty for more than one week after its owning task starts, which would signal the plan drifted.
+
+---
+
+## ADR-11 — RAG corpus restructured with metadata tables and standardized section headings
+
+**Status:** Accepted (implemented by Ashish, 2026-07-15 — logged here for Task 6 continuity, not a decision made in this thread)
+**Date:** 2026-07-15
+
+**Context:** The Task 5 corpus (5 runbooks, 3 postmortems, 2 code docs) was originally free-form Markdown. Ahead of Task 6 (ingestion), every document was rewritten to read like real production docs and embed more predictably.
+
+**Decision:** Every corpus document now carries a `| Field | Value |` metadata table at the top (owner, severity, escalation channel, last reviewed, etc.). Runbooks follow a fixed heading sequence: Overview → Symptoms → Diagnosis → Mitigation → Prevention → Related Runbooks. Postmortems gained `Lessons Learned` sections with owner/status tables. Code docs follow Description → Dependencies → API → Configuration → Operational Notes → Related Runbooks. `data_overview.md` and `sources.md` were updated to match.
+
+**Alternatives Considered:** Not applicable — this was executed directly rather than proposed as options; recorded here after the fact for the benefit of whoever writes Task 6.
+
+**Consequences:** Task 6's chunking strategy has a natural boundary to use — chunk by section heading (and treat the metadata table as structured frontmatter, not prose to embed) rather than by a fixed character/token window. This should improve retrieval precision (Task 7's DoD: the connection-pool runbook in the top-3 results) at low implementation cost, since the section structure is now consistent across every document. Worth validating during Task 7 testing that the metadata-table format doesn't need special handling in the embedding step (e.g. stripping table syntax vs. embedding it as-is).
