@@ -6,8 +6,8 @@
       "title": "Connection pool exhaustion causing payment timeouts",
       "status": "resolved",
       "severity": "high",
-      "start_time": "2026-04-10T03:12:00Z",
-      "end_time": "2026-04-10T04:05:00Z",
+      "start_time": "2026-07-06T03:12:00Z",
+      "end_time": "2026-07-06T04:05:00Z",
       "symptoms": [
         "p95 latency on payments-service jumped from ~150ms to >4000ms",
         "Error rate rose from 0.3% to 22%",
@@ -25,8 +25,8 @@
       "title": "Latency regression after deploy v2.1.0",
       "status": "resolved",
       "severity": "high",
-      "start_time": "2026-05-22T14:40:00Z",
-      "end_time": "2026-05-22T15:10:00Z",
+      "start_time": "2026-07-08T14:40:00Z",
+      "end_time": "2026-07-08T15:10:00Z",
       "symptoms": [
         "p95 latency on checkout-service jumped ~5x within 10 minutes of deploying v2.1.0",
         "Error rate rose from 0.4% to 9%",
@@ -44,8 +44,8 @@
       "title": "Cache stampede after cache-node failover",
       "status": "resolved",
       "severity": "medium",
-      "start_time": "2026-06-30T09:05:00Z",
-      "end_time": "2026-06-30T09:40:00Z",
+      "start_time": "2026-07-09T09:05:00Z",
+      "end_time": "2026-07-09T09:40:00Z",
       "symptoms": [
         "auth-service p95 latency doubled from ~80ms to ~170ms",
         "Redis CPU utilization spiked to 95%+",
@@ -56,15 +56,72 @@
       "related_deploy": null,
       "postmortem_file": "src/data/corpus/postmortems/INC-1003-auth-service-cache-stampede.md",
       "matches_query": "Background corpus depth; not required by any single sample query"
+    },
+    {
+      "incident_id": "INC-1004",
+      "service": "payments-service",
+      "title": "Card-processor authorization failures due to expired TLS certificate",
+      "status": "resolved",
+      "severity": "critical",
+      "start_time": "2026-05-29T06:10:00Z",
+      "end_time": "2026-05-29T06:45:00Z",
+      "symptoms": [
+        "100% of charge-authorization requests failing immediately (TLS handshake failure, not a timeout)",
+        "Error rate at 100% for the full duration",
+        "No processor-side status page incident reported"
+      ],
+      "root_cause": "The mTLS client certificate used to authenticate with the card-processor API expired silently -- no automated renewal or expiry alerting existed.",
+      "resolution": "On-call engineer manually rotated in a pre-generated backup certificate from the secrets vault, restoring processor connectivity within minutes.",
+      "related_deploy": null,
+      "postmortem_file": "src/data/corpus/postmortems/INC-1004-payments-tls-certificate-expiry.md",
+      "matches_query": "Extra corpus depth (not required by a specific sample query)"
+    },
+    {
+      "incident_id": "INC-1005",
+      "service": "checkout-service",
+      "title": "Checkout failures due to inventory-service timeout during flash-sale traffic",
+      "status": "resolved",
+      "severity": "high",
+      "start_time": "2026-06-10T11:00:00Z",
+      "end_time": "2026-06-10T11:50:00Z",
+      "symptoms": [
+        "~15% of checkout requests failing with inventory-check timeouts",
+        "inventory-service p99 latency exceeding checkout-service's 3s timeout",
+        "Correlated with a promotional flash-sale traffic spike"
+      ],
+      "root_cause": "inventory-service had no autoscaling policy and was not provisioned for the promotional traffic spike; its DB query latency degraded under load, pushing p99 past checkout-service's inventory-check timeout.",
+      "resolution": "On-call manually scaled inventory-service from 6 to 20 pods; latency recovered within ~10 minutes.",
+      "related_deploy": null,
+      "postmortem_file": "src/data/corpus/postmortems/INC-1005-checkout-inventory-service-timeout.md",
+      "matches_query": "Extra corpus depth (not required by a specific sample query)"
+    },
+    {
+      "incident_id": "INC-1006",
+      "service": "auth-service",
+      "title": "auth-service pod crash loop due to memory leak in session-cache client",
+      "status": "resolved",
+      "severity": "high",
+      "start_time": "2026-06-22T03:20:00Z",
+      "end_time": "2026-06-22T04:10:00Z",
+      "symptoms": [
+        "Login error rate rose to ~6% as pods cycled through OOM kills",
+        "p95 login latency rose from ~80ms to ~300ms during pod churn",
+        "Pod restart count alert firing repeatedly"
+      ],
+      "root_cause": "A recently upgraded session-cache client library had a connection-object leak that accumulated memory on every cache access, exhausting each pod's memory limit after ~2 hours of runtime.",
+      "resolution": "On-call rolled back the session-cache client library to the previous version and restarted affected pods; memory usage stabilized.",
+      "related_deploy": null,
+      "postmortem_file": "src/data/corpus/postmortems/INC-1006-auth-service-memory-leak-crash-loop.md",
+      "matches_query": "Extra corpus depth (not required by a specific sample query)"
     }
   ],
   "current_incident_context": {
-    "note": "This represents the LIVE, unresolved incident Alex Kim is paging in about (2026-07-14, ~02:00Z). It intentionally has no postmortem yet -- that's what the copilot is helping triage.",
+    "note": "This represents the LIVE, unresolved incident Alex Kim is paging in about (2026-07-11, ~02:00Z -- the last day of the project's 1-week logs/metrics window, treated as 'now'). It intentionally has no postmortem yet -- that's what the copilot is helping triage. INC-1001, INC-1002, and INC-1003 fall inside this same logs/metrics window (2026-07-05 to 2026-07-11) and have matching telemetry files; INC-1004 through INC-1006 are older (May-June) and are historical record only, with no matching raw telemetry -- outside the retention window, same as this live incident's data will eventually be once resolved and written up.",
     "service": "checkout-service",
-    "observed_at": "2026-07-14T02:15:00Z",
+    "observed_at": "2026-07-11T02:15:00Z",
     "deploy": {
       "version": "v2.4.1",
-      "deployed_at": "2026-07-14T01:55:00Z"
+      "deployed_at": "2026-07-11T01:55:00Z"
     },
     "symptoms": [
       "p95 latency on checkout-service spiked ~5x starting ~02:00Z, roughly 5 minutes after v2.4.1 deployed",

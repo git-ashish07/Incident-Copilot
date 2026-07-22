@@ -4,7 +4,7 @@
 |---|---|
 | Status | Final |
 | Incident ID | INC-1002 |
-| Date | 2026-05-22 |
+| Date | 2026-07-08 |
 | Authors | Checkout on-call |
 | Severity | Sev-2 (High) |
 | Duration | 14:40 – 15:10 UTC (30 minutes) |
@@ -51,8 +51,8 @@ breaker configured.
 | Action | Owner | Status |
 |---|---|---|
 | Roll back v2.1.0 | Checkout on-call | Done (immediate mitigation) |
-| Add timeout + circuit breaker to fraud-scoring call | Checkout team | Done (2026-05-27) |
-| Re-deploy fixed version | Checkout team | Done (2026-05-28) |
+| Add timeout + circuit breaker to fraud-scoring call | Checkout team | Done (2026-07-09) |
+| Re-deploy fixed version | Checkout team | Done (2026-07-10) |
 | Add a pre-deploy latency canary check to CI | Checkout team | Open |
 
 ## Lessons Learned

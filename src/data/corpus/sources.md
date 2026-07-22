@@ -13,17 +13,27 @@ demo (no real production content), per `docs/requirements.md` constraints.
 | `incident-tracking-github-issues.md` | What a tracked GitHub issue should contain and how it's opened via tool call. |
 
 ## Postmortems (`src/data/corpus/postmortems/`)
-| File | Incident | Covers |
-|---|---|---|
-| `INC-1001-payments-connection-pool-exhaustion.md` | 2026-04-10, payments-service | Connection-pool exhaustion precedent — the "we saw this exact error 3 months ago" recall target. |
-| `INC-1002-checkout-deploy-latency-regression.md` | 2026-05-22, checkout-service | Deploy-caused latency spike + rollback precedent, closest match to the live incident. |
-| `INC-1003-auth-service-cache-stampede.md` | 2026-06-30, auth-service | Extra corpus depth (not required by a specific sample query). |
+Two incidents per service, six total. Three (`INC-1001`-`INC-1003`) fall
+inside the current logs/metrics window (2026-07-05 to 2026-07-11) and have
+matching raw telemetry files. The other three (`INC-1004`-`INC-1006`) are
+older (2026-05-29 to 2026-06-22) and are historical record only — outside
+the retention window, no matching logs/metrics (see `src/data/data_overview.md`).
+
+| File | Incident | Has telemetry? | Covers |
+|---|---|---|---|
+| `INC-1001-payments-connection-pool-exhaustion.md` | 2026-07-06, payments-service | Yes | Connection-pool exhaustion precedent — the "has this happened before" recall target. |
+| `INC-1002-checkout-deploy-latency-regression.md` | 2026-07-08, checkout-service | Yes | Deploy-caused latency spike + rollback precedent, closest match to the live incident. |
+| `INC-1003-auth-service-cache-stampede.md` | 2026-07-09, auth-service | Yes | Extra corpus depth (not required by a specific sample query). |
+| `INC-1004-payments-tls-certificate-expiry.md` | 2026-05-29, payments-service | No | Extra corpus depth — different failure mode (config/cert expiry vs. connection pool). |
+| `INC-1005-checkout-inventory-service-timeout.md` | 2026-06-10, checkout-service | No | Extra corpus depth — dependency-timeout failure mode, not deploy-caused. |
+| `INC-1006-auth-service-memory-leak-crash-loop.md` | 2026-06-22, auth-service | No | Extra corpus depth — resource-exhaustion failure mode, not cache-related. |
 
 ## Code Docs (`src/data/corpus/code_docs/`)
 | File | Covers |
 |---|---|
 | `payments-service-architecture.md` | DB pool config, retry policy, why the service is sensitive to processor slowdowns. |
 | `checkout-service-deploy-pipeline.md` | Deploy/rollback mechanics and dependencies for checkout-service. |
+| `auth-service-architecture.md` | Session-cache config, dependency sensitivities (TTL sync, client library upgrades). |
 
 ## Sample Query → Corpus Coverage (requirements.md §3)
 

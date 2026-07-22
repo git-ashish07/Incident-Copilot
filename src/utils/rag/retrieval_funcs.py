@@ -53,13 +53,13 @@ def retrieval_pipeline(query: str, vector_store: Chroma, collection_name: str):
         k=60,
         top_n=10,   # feed the cross-encoder a slightly wider pool than the final answer needs
     )
-    print("Fused results with RPF")
+    print("Fused results with RRF")
 
     # create a CrossEncoder instance for re-ranking the fused results
     cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
-    # rerank the fused top-N with the cross-encoder to get the final top-5 results
-    ce_ranked_results = cross_encoder_rerank(cross_encoder, query, fused_results, doc_lookup, top_n=5)
+    # rerank the fused top-N with the cross-encoder to get the final top-3 results
+    ce_ranked_results = cross_encoder_rerank(cross_encoder, query, fused_results, doc_lookup, top_n=3)
     print("Ran cross-encoder re-ranking on fused results.")
     print("\nTotal number of documents retrieved: ", len(ce_ranked_results))
 

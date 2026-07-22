@@ -4,7 +4,7 @@
 |---|---|
 | Status | Final |
 | Incident ID | INC-1003 |
-| Date | 2026-06-30 |
+| Date | 2026-07-09 |
 | Authors | Auth on-call |
 | Severity | Sev-3 (Medium) |
 | Duration | 09:05 – 09:40 UTC (35 minutes) |
@@ -48,8 +48,8 @@ key each queried the primary DB independently.
 ## Action Items
 | Action | Owner | Status |
 |---|---|---|
-| Add single-flight request coalescing | Platform team | Done (2026-07-02) |
-| Add TTL jitter to session cache writes | Platform team | Done (2026-07-03) |
+| Add single-flight request coalescing | Platform team | Done (2026-07-10) |
+| Add TTL jitter to session cache writes | Platform team | Done (2026-07-10) |
 | Add alert on Redis CPU > 80% sustained for 2 minutes | Platform team | Open |
 
 ## Lessons Learned

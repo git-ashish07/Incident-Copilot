@@ -4,7 +4,7 @@
 |---|---|
 | Status | Final |
 | Incident ID | INC-1001 |
-| Date | 2026-04-10 |
+| Date | 2026-07-06 |
 | Authors | Payments on-call |
 | Severity | Sev-2 (High) |
 | Duration | 03:12 – 04:05 UTC (53 minutes) |
@@ -53,9 +53,9 @@ degraded pool, driving it to exhaustion faster than it could recover.
 ## Action Items
 | Action | Owner | Status |
 |---|---|---|
-| Add connection checkout timeout | Payments team | Done (2026-04-14) |
-| Cap retries with backoff on checkout-service | Checkout team | Done (2026-04-16) |
-| Increase payments-service pool size to 150 | Payments team | Done (2026-04-11) |
+| Add connection checkout timeout | Payments team | Done (2026-07-08) |
+| Cap retries with backoff on checkout-service | Checkout team | Done (2026-07-09) |
+| Increase payments-service pool size to 150 | Payments team | Done (2026-07-07) |
 | Add pool saturation alert at 80% of max | Payments team | Open |
 
 ## Lessons Learned

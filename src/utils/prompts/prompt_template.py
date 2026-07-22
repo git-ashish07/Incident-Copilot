@@ -31,15 +31,20 @@ def get_incident_rag_template(system_prompt: str) -> ChatPromptTemplate:
             template (see incident_rag_system_prompt).
 
     Returns:
-        ChatPromptTemplate: expects both `incident_query` and
-            `retrieved_context` when invoked — use format_retrieved_context()
-            to build the latter from a list of retrieved Documents.
+        ChatPromptTemplate: expects `incident_query`, `retrieved_context`,
+            and `tool_response` when invoked — use format_retrieved_context()
+            to build `retrieved_context` from a list of retrieved Documents.
+            `tool_response` should be an empty string when no tool was
+            called this turn (it's shown as a blank section, not omitted).
     """
     return ChatPromptTemplate.from_messages([
         SystemMessagePromptTemplate.from_template(system_prompt),
         HumanMessagePromptTemplate.from_template("""
         [RETRIEVED CONTEXT]
         {retrieved_context}
+
+        [TOOL RESPONSE]
+        {tool_response}
 
         [INPUT]
         Incident query: {incident_query}

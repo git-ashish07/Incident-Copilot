@@ -1,0 +1,42 @@
+{"timestamp": "2026-07-06T00:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "12d41aff"}
+{"timestamp": "2026-07-06T01:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "1b760c44"}
+{"timestamp": "2026-07-06T01:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "8e1441e4"}
+{"timestamp": "2026-07-06T02:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "70c34c3c"}
+{"timestamp": "2026-07-06T02:55:12Z", "level": "WARN", "service": "payments-service", "message": "Card-processor upstream reporting elevated response times (~800ms, baseline ~150ms)", "request_id": "58858898"}
+{"timestamp": "2026-07-06T03:05:44Z", "level": "WARN", "service": "payments-service", "message": "DB connection checkout took 1200ms (baseline ~15ms)", "request_id": "f48bd912"}
+{"timestamp": "2026-07-06T03:12:01Z", "level": "ERROR", "service": "payments-service", "message": "ConnectionPoolTimeoutException: Timeout waiting for connection from pool (active=100, idle=0, max=100)", "request_id": "dd66ddef"}
+{"timestamp": "2026-07-06T03:12:33Z", "level": "ERROR", "service": "payments-service", "message": "ConnectionPoolTimeoutException: Timeout waiting for connection from pool (active=100, idle=0, max=100)", "request_id": "3836ce66"}
+{"timestamp": "2026-07-06T03:13:50Z", "level": "ERROR", "service": "payments-service", "message": "ConnectionPoolTimeoutException: Timeout waiting for connection from pool (active=100, idle=0, max=100)", "request_id": "d5790372"}
+{"timestamp": "2026-07-06T03:15:02Z", "level": "ERROR", "service": "payments-service", "message": "Retry attempt 4/5 for charge-authorization request still failing: ConnectionPoolTimeoutException", "request_id": "49dbd1fc"}
+{"timestamp": "2026-07-06T03:20:18Z", "level": "ERROR", "service": "payments-service", "message": "ConnectionPoolTimeoutException: Timeout waiting for connection from pool (active=100, idle=0, max=100)", "request_id": "1e0e45a3"}
+{"timestamp": "2026-07-06T03:20:19Z", "level": "WARN", "service": "payments-service", "message": "checkout-service retrying charge-authorization request (attempt 5/5)", "request_id": "6a8120fb"}
+{"timestamp": "2026-07-06T03:35:07Z", "level": "ERROR", "service": "payments-service", "message": "ConnectionPoolTimeoutException: Timeout waiting for connection from pool (active=100, idle=0, max=100)", "request_id": "2e841f85"}
+{"timestamp": "2026-07-06T03:50:44Z", "level": "ERROR", "service": "payments-service", "message": "ConnectionPoolTimeoutException: Timeout waiting for connection from pool (active=100, idle=0, max=100)", "request_id": "9d47c664"}
+{"timestamp": "2026-07-06T04:02:10Z", "level": "INFO", "service": "payments-service", "message": "Pods restarted by on-call (manual mitigation); active connections dropping", "request_id": "637d6cc7"}
+{"timestamp": "2026-07-06T04:05:00Z", "level": "INFO", "service": "payments-service", "message": "Connection pool healthy: active=31, idle=69, max=100", "request_id": "07f9dd99"}
+{"timestamp": "2026-07-06T04:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "c9813f46"}
+{"timestamp": "2026-07-06T05:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "c1cec6f8"}
+{"timestamp": "2026-07-06T06:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "7da1fb92"}
+{"timestamp": "2026-07-06T07:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "e075781b"}
+{"timestamp": "2026-07-06T07:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "3de6f0e0"}
+{"timestamp": "2026-07-06T08:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "127913f8"}
+{"timestamp": "2026-07-06T09:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "cccac83a"}
+{"timestamp": "2026-07-06T10:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "7f249ad5"}
+{"timestamp": "2026-07-06T10:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "dae474d5"}
+{"timestamp": "2026-07-06T11:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "0e524c50"}
+{"timestamp": "2026-07-06T12:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "c5535a74"}
+{"timestamp": "2026-07-06T13:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "deb45605"}
+{"timestamp": "2026-07-06T13:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "8c9dc409"}
+{"timestamp": "2026-07-06T14:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "f90393f8"}
+{"timestamp": "2026-07-06T15:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "e7db455c"}
+{"timestamp": "2026-07-06T16:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "10d334b7"}
+{"timestamp": "2026-07-06T16:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "cbf8850f"}
+{"timestamp": "2026-07-06T17:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "f1108a7c"}
+{"timestamp": "2026-07-06T18:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "26da5876"}
+{"timestamp": "2026-07-06T19:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "cfc9257e"}
+{"timestamp": "2026-07-06T19:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "5da862fc"}
+{"timestamp": "2026-07-06T20:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "2db46963"}
+{"timestamp": "2026-07-06T21:15:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "19afd0de"}
+{"timestamp": "2026-07-06T22:00:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "55709601"}
+{"timestamp": "2026-07-06T22:45:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "096bf493"}
+{"timestamp": "2026-07-06T23:30:00Z", "level": "INFO", "service": "payments-service", "message": "Health check OK -- all dependencies nominal", "request_id": "edc9540d"}

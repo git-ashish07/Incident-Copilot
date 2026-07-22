@@ -34,8 +34,9 @@ specific runbooks once a likely cause is identified.
 5. Grade severity by impact: Sev-1 if error rate is climbing with no sign of
    stabilizing or availability is at risk; Sev-2 if p95 latency exceeds ~3s
    but the service is still serving most requests; Sev-3 for a smaller,
-   contained spike. Escalate Sev-1/Sev-2 immediately rather than continuing
-   to dig alone.
+   contained spike; Sev-4 for a brief, self-resolving blip that never
+   breached alerting thresholds (log it, no escalation needed). Escalate
+   Sev-1/Sev-2 immediately rather than continuing to dig alone.
 
 ## Next Steps
 - If a deploy is the likely cause: see the Deploy Rollback Procedure runbook.

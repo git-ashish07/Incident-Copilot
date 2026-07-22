@@ -3,6 +3,47 @@
 Plain-language guide to everything in `src/data/`. Everything here is fake
 (synthetic) data made up for this project — no real production data.
 
+**Timeframe:** this project has two overlapping date windows, matching how
+a real org's data actually works — postmortems stick around indefinitely,
+but raw log/metric retention is much shorter, so recent incidents have
+both, older ones only have the postmortem:
+
+- **Logs/metrics window — 2026-07-05 to 2026-07-11 (1 week).** Every
+  service (`payments-service`, `checkout-service`, `auth-service`) has a
+  continuous metrics CSV and logs JSONL file for every day in this window.
+  The live/unresolved incident Alex Kim is paging about is anchored to the
+  last day (2026-07-11, ~02:00Z), which the `query_logs` tool (Week 2)
+  treats as "now" for resolving relative timeframes like "last 15 minutes."
+  This week isn't uniformly quiet — see "What's actually in the logs" below.
+- **Postmortem history — 2026-05-29 to 2026-07-11 (6 weeks).** All 6
+  resolved incidents (`INC-1001` through `INC-1006`, 2 per service).
+  `INC-1001`-`INC-1003` fall *inside* the logs/metrics window
+  (2026-07-06/08/09) and have matching raw telemetry — you can look up
+  their actual log lines and metric spikes, not just read about them.
+  `INC-1004`-`INC-1006` are older (May-June) and are historical record
+  only, with no matching logs/metrics — they've aged out of the retention
+  window, the same way a real postmortem from 6+ weeks ago usually outlives
+  raw log retention.
+
+**What's actually in the logs:** the July window isn't just one incident
+surrounded by silence. It has 3 real incidents (`INC-1001`/`1002`/`1003`,
+each with a full postmortem), 3 minor Sev-4 blips (brief, self-resolving,
+below paging threshold — no postmortem, no `incidents.json` entry, just
+texture in the raw logs/metrics), and the live unresolved incident on the
+last day:
+
+| Day | Service | Event |
+|---|---|---|
+| 07-05 | payments | Sev-4 — brief GC-pause latency wobble, self-resolved |
+| 07-06 | payments | **INC-1001** — connection-pool exhaustion |
+| 07-07 | checkout | Sev-4 — brief 502s from a flaky fraud-scoring call, self-resolved |
+| 07-08 | checkout | **INC-1002** — deploy latency regression |
+| 07-09 | auth | **INC-1003** — cache stampede |
+| 07-10 | auth | Sev-4 — brief Redis reconnect wobble, self-resolved |
+| 07-11 | checkout | **Live incident** — v2.4.1 deploy, ongoing, no postmortem (what the copilot is triaging) |
+
+Every other service-day not listed above is quiet baseline — no anomaly.
+
 ## `corpus/` — what Week 1's RAG pipeline is built on
 
 The document collection that gets chunked and embedded in the RAG pipeline
@@ -58,12 +99,22 @@ These exist already so Week 2 (tools/memory) has real data to build against,
 but they are **not** wired into the corpus or referenced by it yet.
 
 - **`incidents/incidents.json`** — a structured (JSON) incident database:
-  what broke, when, root cause, resolution. Will power the "has this happened
+  what broke, when, root cause, resolution, for all 6 postmortem incidents
+  plus the live incident context. Will power the "has this happened
   before?" memory feature in Week 2.
-- **`metrics/`** — CSV time-series numbers (latency, error rate, requests/sec)
-  simulating a monitoring dashboard. Will back the `query_logs`/metrics tool
-  in Week 2.
-- **`logs/`** — small text files of fake raw log lines. Also for the Week 2
-  log-query tool.
+- **`metrics/`** — one CSV per service-day, every day from 2026-07-05 to
+  2026-07-11, for all 3 services (21 files total). Continuous time-series
+  (5-minute baseline intervals across the full day) so a query against any
+  reasonable timeframe in the window returns something sensible. 6 of the
+  21 files have an anomaly spliced in — the 3 postmortem incidents, the 3
+  Sev-4 blips (see the table above) — the rest are pure baseline. The one
+  file that stops early is `checkout-service_2026-07-11.csv` (the live
+  incident), which cuts off at "now" (02:15Z) — no future data past that
+  point. Will back the `query_logs` tool in Week 2.
+- **`logs/`** — one JSON-lines file per service-day, same 21-file coverage
+  and same 6-files-have-an-anomaly pattern as `metrics/`. Structured fields
+  (`timestamp`, `level`, `service`, `message`, `request_id`) mimicking a
+  real log query platform's response shape, with baseline `INFO` noise
+  every ~45 minutes on quiet days. Also for the Week 2 log-query tool.
 
 If you're building the Week 1 RAG pipeline, you only need `corpus/`.

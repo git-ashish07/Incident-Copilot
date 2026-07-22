@@ -4,7 +4,36 @@ A running log of changes made to this repo — organized by date and author so a
 
 ---
 
-## 2026-07-15 — Ashish Rathore
+## 2026-07-22 — Ashish Rathore
+
+### Added tool-calling agent loop (Tasks 10-12) and synthetic logs/metrics window
+Wired the Week 2 tools into the chat pipeline and generated the telemetry data they read from, on top of the Week 1 RAG pipeline.
+
+**Tools (`src/utils/tools.py`, `src/utils/models.py`)** — new:
+- `get_current_time` — fixed-clock lookup (`2026-07-11T02:15:00Z`) used to resolve relative phrases like "last 15 minutes" into concrete timestamps
+- `identify_service` — structured-output LLM call that extracts which of `auth-service`/`checkout-service`/`payments-service` an incident query refers to
+- `get_logs` / `get_metrics` — deterministic file-backed fetchers reading `src/data/logs/{service}_{date}.jsonl` and `src/data/metrics/{service}_{date}.csv` for a given `service` + `timeframe`, with graceful "not found"/"invalid service" error responses
+- `src/utils/models.py` — Pydantic schemas (`ServiceExtraction`, `Timeframe`, `GetLogsInput`, `GetMetricsInput`) backing the above
+- `docs/tools.md` — written specs for all four tools plus the not-yet-implemented `create_github_issue`, covering inputs, output shape, and error cases, grounded in the actual data on disk
+
+**Agent loop (`main.py`, `chat.py`)**:
+- Both entry points now bind the four tools to the LLM (`parallel_tool_calls=False`, since `get_logs`/`get_metrics` need `get_current_time`'s result to resolve a timeframe before they can run) and loop up to 5 iterations, dispatching tool calls and feeding `ToolMessage` results back until the model returns a final answer
+- `chat.py` additionally writes a per-run log file (`run_logs/chat_<timestamp>.log`, gitignored) capturing the user query, retrieved context, every tool call/response, and the final answer — handler created lazily on first use to avoid empty files from Gradio's reload passes
+
+**Module reshuffle** — consolidated `src/llm_funcs/` and `src/prompts/` into `src/utils/llm_config.py` and `src/utils/prompts/` (`system_prompts.py`, `prompt_template.py`), updated all imports accordingly; old locations removed
+
+**System prompt (`src/utils/prompts/system_prompts.py`)** — added a `[TOOL RESPONSE]` section to the RAG prompt so tool output is synthesized as confirmed fact (not "go check the logs yourself"), plus a required "Evidence" section listing raw log lines/metric points separately from the narrative and citations
+
+**Synthetic telemetry (`src/data/logs/`, `src/data/metrics/`)** — new: one JSONL/CSV pair per service per day for 2026-07-05 to 2026-07-11 (21 files each), continuous baseline data with 6 files per type carrying a spliced-in anomaly (3 postmortem incidents + 3 sub-paging Sev-4 blips); `checkout-service_2026-07-11` cuts off at the simulated "now" (02:15Z)
+
+**Corpus & data docs**:
+- Added 3 more postmortems (`INC-1004` TLS cert expiry, `INC-1005` inventory-service timeout, `INC-1006` memory-leak crash loop) and `code_docs/auth-service-architecture.md`, bringing the postmortem set to 2-per-service; updated `incidents.json`, `sources.md`, and `data_overview.md` to document the new logs/metrics retention window and which incidents fall inside vs. outside it
+- Rewrote `sample_incident_queries.py`'s 7 queries to be vaguer/more realistic (implied service names, precedent-recall and tool-triggering phrasing) instead of naming the service directly
+- Retrieval tuning (`src/utils/rag/retrieval_funcs.py`): cross-encoder re-rank now returns top-3 instead of top-5; fixed an "RPF"→"RRF" log typo
+
+**Housekeeping**: added `docs/incidentpilot-week1-presentation.pptx`; removed the old flat `metrics/*_metrics.csv` files (superseded by the per-day files above); `pyproject.toml` picked up `ollama` and `pydantic` as explicit dependencies; `.gitignore` now excludes `run_logs/`
+
+
 
 ### Reformatted and standardised all corpus documents the format and pattern followed in real world
 Rewrote all runbooks, postmortems, and code docs to use a consistent structure so they read like real production docs and embed better into the RAG pipeline.

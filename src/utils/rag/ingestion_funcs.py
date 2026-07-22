@@ -10,7 +10,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 # importing supporting functions from other modules
-from src.llm_funcs.llm_config import embedding_instance
+from src.utils.llm_config import embedding_instance
 from src.utils.rag.chunking_funcs import get_file_names, parse_file_into_chunks, create_documents_from_chunks
 
 # function that will trigger the entire ingestion pipeline, including chunking, embedding, and storing the documents in the vector database
