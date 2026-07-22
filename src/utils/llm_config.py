@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
 
 
-def llm_instance(api_key: str, model_name: str = "llama-3.3-70b-versatile", temperature: float = 0.0):
+def llm_instance(api_key: str, model_name: str = "llama-3.3-70b-versatile", temperature: float = 0.0) -> ChatGroq:
     """
     Set up the LLM with the provided API key and model name.
 
@@ -20,6 +20,24 @@ def llm_instance(api_key: str, model_name: str = "llama-3.3-70b-versatile", temp
     return ChatGroq(
         model=model_name,
         api_key=api_key,
+        temperature=temperature
+    )
+
+def llm_openai_instance(api_key: str, model_name: str = "gpt-4o", temperature: float = 0.0) -> ChatOpenAI:
+    """
+    Set up the OpenAI LLM with the provided API key and model name.
+
+    Args:
+        api_key (str): The API key for authentication.
+        model_name (str): The name of the model to use. Default is "gpt-4o".
+        temperature (float): The temperature setting for the model. Default is 0.0.
+    Returns:
+        ChatOpenAI: An instance of the ChatOpenAI class initialized with the provided parameters.
+    """
+
+    return ChatOpenAI(
+        model=model_name,
+        openai_api_key=api_key,
         temperature=temperature
     )
 

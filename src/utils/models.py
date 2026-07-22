@@ -6,8 +6,11 @@ class ServiceExtraction(BaseModel):
     Type of service extraction from a given incident query to identify which service is being referred to in the query.
     """
 
-    service_name: Literal["auth-service", "checkout-service", "payments-service", "None"] = Field(
+    service_name: Literal["auth-service", "checkout-service", "payments-service", "not related to any service"] = Field(
         description = "The name of the service extracted from the incident query"
+    )
+    reason: str = Field(
+        description = "One liner justification for why do you think the query is related to the service you have identified. If the query is not related to any service, then explain why it is not related to any service."
     )
 
 class Timeframe(BaseModel):

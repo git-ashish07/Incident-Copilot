@@ -3,6 +3,7 @@ import os
 import json
 import logging
 from datetime import datetime
+from typing import Iterator
 
 curr_dir = os.getcwd()
 print("Current directory: ", curr_dir)
@@ -18,10 +19,10 @@ else:
 
 
 import gradio as gr
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 # importing llm related functions
-from src.utils.llm_config import llm_instance
+from src.utils.llm_config import llm_instance, llm_openai_instance
 
 # importing prompt related functions
 from src.utils.prompts.system_prompts import incident_rag_system_prompt
@@ -49,8 +50,13 @@ TOOL_MAP = {tool.name: tool for tool in tools}  # tool map for dispatching tool 
 
 # Initialize the LLM instance, tools bound sequentially (not parallel -- a
 # parallel call would let the model write get_logs's timeframe before it has
-# get_current_time's result, forcing it to guess/hallucinate a date)
-llm = llm_instance(api_key=os.getenv("GROQ_API_KEY")).bind_tools(tools, parallel_tool_calls=False)
+# llm = llm_instance(api_key=os.getenv("GROQ_API_KEY")).bind_tools(tools, parallel_tool_calls=False)
+llm = llm_openai_instance(api_key=os.getenv("OPENAI_API_KEY")).bind_tools(tools, parallel_tool_calls=False)
+
+# Only the last N user/assistant interactions are replayed to the LLM as
+# conversation history -- older turns are dropped as the conversation grows,
+# rather than letting the context window grow unbounded.
+MAX_HISTORY_INTERACTIONS = 5
 
 # Runtime log: one file per app run -- user query, retrieved context, every
 # tool call + its response, and the final answer, one turn after another.
@@ -83,7 +89,33 @@ def setup_logger() -> None:
 
 # ----------------------- per-message handler -----------------------
 
-def diagnose_incident(message: str) -> str:
+def build_history_messages(history: list) -> list:
+    """
+    Converts Gradio's chat history (list of {"role", "content"} dicts) into
+    LangChain messages, keeping only the last MAX_HISTORY_INTERACTIONS
+    user/assistant pairs -- older turns are dropped rather than replayed to
+    the LLM, so the context sent per request stays bounded as the
+    conversation grows.
+
+    Args:
+        history (list): the full chat history supplied by gr.ChatInterface.
+
+    Returns:
+        list: LangChain HumanMessage/AIMessage objects for the retained turns.
+    """
+    trimmed = history[-(MAX_HISTORY_INTERACTIONS * 2):]
+
+    history_messages = []
+    for turn in trimmed:
+        if turn["role"] == "user":
+            history_messages.append(HumanMessage(content=turn["content"]))
+        elif turn["role"] == "assistant":
+            history_messages.append(AIMessage(content=turn["content"]))
+
+    return history_messages
+
+
+def diagnose_incident(message: str, history: list) -> Iterator[str]:
     """
     Handles one turn of the chat: retrieves grounding context for the
     incident description via the hybrid retrieval pipeline (BM25 + bi-encoder
@@ -93,10 +125,16 @@ def diagnose_incident(message: str) -> str:
 
     Args:
         message (str): the latest incident query typed by the user.
+        history (list): the chat history, as a list of {"role", "content"}
+            dicts supplied by gr.ChatInterface. Only the last
+            MAX_HISTORY_INTERACTIONS turns are replayed to the LLM.
 
-    Returns:
-        str: the assistant's diagnosis response, grounded in retrieved
-            context and any tool results gathered this turn.
+    Yields:
+        str: the assistant's diagnosis response so far, growing as the final
+            answer streams in (grounded in retrieved context and any tool
+            results gathered this turn). Gradio replaces the displayed
+            message with each yielded value, so each yield carries the full
+            text accumulated so far, not just the new delta.
     """
     setup_logger()
 
@@ -112,19 +150,31 @@ def diagnose_incident(message: str) -> str:
 
     logger.info(f"RETRIEVED CONTEXT:\n{retrieved_context}\n")
 
-    # build the initial message list (system + human w/ retrieved context)
-    messages = incident_rag_prompt_template.format_messages(
+    # build the initial message list (system + human w/ retrieved context),
+    # then splice in the trimmed conversation history between the two so the
+    # model sees prior turns before this turn's retrieved context/query
+    system_message, human_message = incident_rag_prompt_template.format_messages(
         incident_query=message,
         retrieved_context=retrieved_context,
     )
+    history_messages = build_history_messages(history)
+    messages = [system_message, *history_messages, human_message]
 
-    # agent loop: keep calling the LLM until it stops requesting tools
+    # agent loop: keep calling the LLM until it stops requesting tools.
     final_answer = None
     max_iterations = 5
 
     for iteration in range(1, max_iterations + 1):
-        response = llm.invoke(messages)
-        messages.append(response)  # AIMessage, possibly carrying tool_calls
+        response = None  # accumulates into a full AIMessageChunk as chunks merge via `+`
+        streamed_text = ""
+
+        for chunk in llm.stream(messages):
+            response = chunk if response is None else response + chunk
+            if chunk.content:
+                streamed_text += chunk.content
+                yield streamed_text
+
+        messages.append(response)  # merged AIMessageChunk, possibly carrying tool_calls
 
         if not response.tool_calls:
             final_answer = response.content
@@ -149,7 +199,12 @@ def diagnose_incident(message: str) -> str:
     logger.info(f"FINAL ANSWER:\n{final_answer}\n")
     logger.info("=" * 60)
 
-    return final_answer
+    # Ensures the UI shows final_answer even on paths that never streamed
+    # content (e.g. the max-iterations fallback) -- a generator's `return`
+    # value isn't delivered to the caller, only yielded values are, so this
+    # can't be a plain `return`. For the normal path, final_answer already
+    # equals the last streamed_text, so this just re-yields the same text.
+    yield final_answer
 
 
 # ----------------------- Gradio chat UI -----------------------
@@ -163,13 +218,12 @@ demo = gr.ChatInterface(
         "steps for a human on-call engineer to review and run themselves."
     ),
     examples=[
-        # the 6 sample queries from docs/requirements.md §3
-        "API latency spiked 5x in the last 15 minutes, what's going on?",
-        "Has this exact error pattern happened before?",
-        "What does the runbook say to do for a connection-pool exhaustion?",
-        "Roll back the last deploy.",
-        "Open a GitHub issue to track this incident.",
-        "Just push a hotfix directly to production now.",
+        # one per targeted service (implied by symptom, not named directly), one rollback (no-action-rule) query, one generic/service-agnostic query
+        "Refund requests are failing left and right and logs are full of ConnectionPoolTimeoutException, what should I check?",
+        "p95 latency on completing purchases just spiked right after a deploy, can you help me figure out what's going on?",
+        "A bunch of users can't log in and something's spiking hard on our side, any idea what's happening?",
+        "Error rate on completing purchases jumped right after we shipped v2.1.0 this afternoon, just roll it back for me.",
+        "What's our policy for handling a production incident before a human gets paged?",
     ],
 )
 
