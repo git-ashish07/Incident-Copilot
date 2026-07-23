@@ -2,8 +2,9 @@
 import os
 import json
 import logging
+import asyncio
 from datetime import datetime
-from typing import Iterator
+from typing import Iterator, AsyncIterator
 
 curr_dir = os.getcwd()
 print("Current directory: ", curr_dir)
@@ -17,7 +18,7 @@ else:
 
     print("Changed to Root directory: ", curr_dir)
 
-
+from fastmcp import Client
 import gradio as gr
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
@@ -29,7 +30,8 @@ from src.utils.prompts.system_prompts import incident_rag_system_prompt
 from src.utils.prompts.prompt_template import get_incident_rag_template
 from src.utils.rag.ingestion_funcs import ingestion_pipeline
 from src.utils.rag.retrieval_funcs import retrieval_pipeline
-from src.utils.tools import get_current_time, identify_service, get_logs, get_metrics
+# from src.utils.tools import get_current_time, identify_service, get_logs, get_metrics
+from src.utils.tools import mcp
 
 # importing dotenv to load environment variables
 from dotenv import load_dotenv
@@ -44,14 +46,22 @@ incident_rag_prompt_template = get_incident_rag_template(incident_rag_system_pro
 # run the ingestion pipeline to ingest the documents into the vector database
 vectordb_instance = ingestion_pipeline(data_folders=["corpus"], exclude_files=["sources.md"])
 
-# getting the tools to be used by the LLM for retrieval and analysis
-tools = [get_current_time, identify_service, get_logs, get_metrics]
-TOOL_MAP = {tool.name: tool for tool in tools}  # tool map for dispatching tool calls
+# fetch the tool list from the MCP server once at startup and convert to 
+# function schemas so bind_tools can pass them straight through
+async def _discover_tool_schemas():
+    async with Client(mcp) as client:
+        mcp_tools = await client.list_tools()
+        return [
+            {"type": "function", "function": {"name": t.name, "description": t.description or "", "parameters": t.inputSchema}}
+            for t in mcp_tools
+        ]
+
+tool_schemas = asyncio.run(_discover_tool_schemas())
 
 # Initialize the LLM instance, tools bound sequentially (not parallel -- a
 # parallel call would let the model write get_logs's timeframe before it has
 # llm = llm_instance(api_key=os.getenv("GROQ_API_KEY")).bind_tools(tools, parallel_tool_calls=False)
-llm = llm_openai_instance(api_key=os.getenv("OPENAI_API_KEY")).bind_tools(tools, parallel_tool_calls=False)
+llm = llm_openai_instance(api_key=os.getenv("OPENAI_API_KEY")).bind_tools(tool_schemas, parallel_tool_calls=False)
 
 # Only the last N user/assistant interactions are replayed to the LLM as
 # conversation history -- older turns are dropped as the conversation grows,
@@ -115,7 +125,7 @@ def build_history_messages(history: list) -> list:
     return history_messages
 
 
-def diagnose_incident(message: str, history: list) -> Iterator[str]:
+async def diagnose_incident(message: str, history: list) -> AsyncIterator[list]:
     """
     Handles one turn of the chat: retrieves grounding context for the
     incident description via the hybrid retrieval pipeline (BM25 + bi-encoder
@@ -130,18 +140,37 @@ def diagnose_incident(message: str, history: list) -> Iterator[str]:
             MAX_HISTORY_INTERACTIONS turns are replayed to the LLM.
 
     Yields:
-        str: the assistant's diagnosis response so far, growing as the final
-            answer streams in (grounded in retrieved context and any tool
-            results gathered this turn). Gradio replaces the displayed
-            message with each yielded value, so each yield carries the full
-            text accumulated so far, not just the new delta.
+        list: the growing list of assistant bubbles for this turn -- one
+            collapsible status bubble per phase (retrieval, thinking, tool
+            use), each carrying a `metadata` dict so Gradio renders it as a
+            Claude-style "thought" accordion, plus a final plain bubble (no
+            metadata) that streams in the actual diagnosis. Gradio replaces
+            the whole turn with each yielded list, so every yield carries
+            the full set of bubbles so far, not just what's new.
     """
     setup_logger()
 
     logger.info("=" * 60)
     logger.info(f"USER QUERY:\n{message}\n")
 
-    # run the retrieval pipeline to get relevant context for the incident query
+    ui_messages = []
+
+    def snapshot() -> list:
+        return list(ui_messages)
+
+    # Single collapsible status bubble for the whole turn -- its title
+    # tracks the current phase and its content accumulates a step-by-step
+    # log, so the UI shows one compact "working..." accordion instead of a
+    # growing stack of bubbles. It collapses (status -> "done") the moment
+    # the model starts streaming its actual answer.
+    status = {"role": "assistant", "content": "", "metadata": {"title": "🔎 Looking into corpus...", "status": "pending"}}
+    ui_messages.append(status)
+
+    def log_step(line: str) -> None:
+        status["content"] += (("\n" if status["content"] else "") + f"- {line}")
+
+    yield snapshot()
+
     retrieved_context = retrieval_pipeline(
         query=message,
         vector_store=vectordb_instance,
@@ -149,6 +178,7 @@ def diagnose_incident(message: str, history: list) -> Iterator[str]:
     )
 
     logger.info(f"RETRIEVED CONTEXT:\n{retrieved_context}\n")
+    log_step("Looked into the corpus for relevant runbooks/postmortems")
 
     # build the initial message list (system + human w/ retrieved context),
     # then splice in the trimmed conversation history between the two so the
@@ -162,49 +192,78 @@ def diagnose_incident(message: str, history: list) -> Iterator[str]:
 
     # agent loop: keep calling the LLM until it stops requesting tools.
     final_answer = None
+    final_bubble = None  # the plain (no metadata) bubble the final answer streams into, created lazily
     max_iterations = 5
 
-    for iteration in range(1, max_iterations + 1):
-        response = None  # accumulates into a full AIMessageChunk as chunks merge via `+`
-        streamed_text = ""
+    # open one MCP client connection for the whole turn -- every tool call
+    # across every iteration of this message's agent loop reuses it, rather
+    # than reconnecting to the MCP server on each individual tool call
+    async with Client(mcp) as client:
+        for iteration in range(1, max_iterations + 1):
+            # ---- phase: thinking (deciding whether to answer or call a tool) ----
+            status["metadata"]["title"] = "🤔 Thinking..."
+            yield snapshot()
 
-        for chunk in llm.stream(messages):
-            response = chunk if response is None else response + chunk
-            if chunk.content:
-                streamed_text += chunk.content
-                yield streamed_text
+            response = None  # accumulates into a full AIMessageChunk as chunks merge via `+`
 
-        messages.append(response)  # merged AIMessageChunk, possibly carrying tool_calls
+            # astream (not stream) since we're inside an async generator now
+            async for chunk in llm.astream(messages):
+                response = chunk if response is None else response + chunk
+                if chunk.content:
+                    # the model is streaming its final answer, not a tool call --
+                    # collapse the status bubble and start the real one
+                    if final_bubble is None:
+                        status["metadata"]["title"] = "✅ Done"
+                        status["metadata"]["status"] = "done"
+                        final_bubble = {"role": "assistant", "content": ""}
+                        ui_messages.append(final_bubble)
+                    final_bubble["content"] += chunk.content
+                    yield snapshot()
 
-        if not response.tool_calls:
-            final_answer = response.content
-            break
+            messages.append(response)  # merged AIMessageChunk, possibly carrying tool_calls
 
-        print(f"\nIteration #{iteration}")
-        for tool_call in response.tool_calls:
-            tool_fn = TOOL_MAP[tool_call["name"]]
-            result = tool_fn.invoke(tool_call["args"])
+            if not response.tool_calls:
+                status["metadata"]["title"] = "✅ Done"
+                status["metadata"]["status"] = "done"
+                final_answer = response.content
+                break
 
-            logger.info(f"TOOL CALL: {tool_call['name']}({tool_call['args']})")
-            logger.info(f"TOOL RESPONSE:\n{json.dumps(result, indent=2)}\n")
+            # ---- phase: tool use ----
+            tool_names = ", ".join(tool_call["name"] for tool_call in response.tool_calls)
+            status["metadata"]["title"] = f"🛠️ Using {tool_names}..."
+            yield snapshot()
 
-            messages.append(ToolMessage(
-                content=json.dumps(result),
-                tool_call_id=tool_call["id"],
-            ))
-            print(f"  [tool] {tool_call['name']}({tool_call['args']}) -> {result}")
-    else:
-        final_answer = "Reached max iterations without a final answer."
+            print(f"\nIteration #{iteration}")
+            for tool_call in response.tool_calls:
+                # dispatch the call through the MCP client instead of a local TOOL_MAP
+                result = await client.call_tool(tool_call["name"], tool_call["args"])
+                # .data is the tool's actual return value; fall back to structured_content if unset
+                result_payload = result.data if result.data is not None else result.structured_content
+
+                logger.info(f"TOOL CALL: {tool_call['name']}({tool_call['args']})")
+                logger.info(f"TOOL RESPONSE:\n{json.dumps(result_payload, indent=2)}\n")
+
+                messages.append(ToolMessage(
+                    content=json.dumps(result_payload),
+                    tool_call_id=tool_call["id"],
+                ))
+                print(f"  [tool] {tool_call['name']}({tool_call['args']}) -> {result_payload}")
+
+            log_step(f"Used {tool_names}")
+            yield snapshot()
+        else:
+            final_answer = "Reached max iterations without a final answer."
+            status["metadata"]["title"] = "✅ Done"
+            status["metadata"]["status"] = "done"
+            ui_messages.append({"role": "assistant", "content": final_answer})
 
     logger.info(f"FINAL ANSWER:\n{final_answer}\n")
     logger.info("=" * 60)
 
     # Ensures the UI shows final_answer even on paths that never streamed
-    # content (e.g. the max-iterations fallback) -- a generator's `return`
-    # value isn't delivered to the caller, only yielded values are, so this
-    # can't be a plain `return`. For the normal path, final_answer already
-    # equals the last streamed_text, so this just re-yields the same text.
-    yield final_answer
+    # content into final_bubble (e.g. the max-iterations fallback). For the
+    # normal path this just re-yields the same bubbles already shown.
+    yield snapshot()
 
 
 # ----------------------- Gradio chat UI -----------------------

@@ -33,10 +33,7 @@ def get_incident_rag_template(system_prompt: str) -> ChatPromptTemplate:
     Returns:
         ChatPromptTemplate: expects `incident_query` and `retrieved_context`
             when invoked — use format_retrieved_context() to build
-            `retrieved_context` from a list of retrieved Documents. Tool
-            results are not part of this template; the agent loop appends
-            them to the message list as ToolMessage turns after this initial
-            prompt is formatted (see chat.py / main.py).
+            `retrieved_context` from a list of retrieved Documents.
     """
     return ChatPromptTemplate.from_messages([
         SystemMessagePromptTemplate.from_template(system_prompt),

@@ -1,7 +1,13 @@
+"""
+To run this file, you need to change the decorators for tools.
+This version shows how to run tools directly without MCP.
+"""
+
 # set current directory to the main project directory
 import os
 import sys
 import json
+import asyncio
 
 curr_dir = os.getcwd()
 print("Current directory: ", curr_dir)
@@ -17,6 +23,7 @@ else:
 
 
 from langchain_core.messages import ToolMessage
+from fastmcp import Client
 
 # importing llm related functions
 from src.utils.llm_config import llm_instance
@@ -73,15 +80,18 @@ def main():
             response = llm.invoke(messages)
             messages.append(response)  # AIMessage, possibly carrying tool_calls
 
+            # check if the LLM has requested any tools to be called, if not, we have reached the final answer
             if not response.tool_calls:
                 final_answer = response.content
                 break
 
+            # if the LLM has requested tools, we need to call those tools and append the results to the messages for the next iteration
             print(f"\nIteration #{iteration}")
             for tool_call in response.tool_calls:
                 tool_fn = TOOL_MAP[tool_call["name"]]
                 result = tool_fn.invoke(tool_call["args"])
 
+                # append the tool result to the messages for the next iteration
                 messages.append(ToolMessage(
                     content=json.dumps(result),
                     tool_call_id=tool_call["id"],

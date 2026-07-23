@@ -4,13 +4,19 @@ import pandas as pd
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, ToolMessage, SystemMessage
 from langchain_core.tools import tool
+from fastmcp import FastMCP
+from typing import Literal
 
 from src.utils.llm_config import llm_instance, llm_openai_instance
-from src.utils.models import ServiceExtraction, GetLogsInput, GetMetricsInput
+from src.utils.models import ServiceExtraction, GetLogsInput, GetMetricsInput, Timeframe
+
+
+# Initialize MCP server
+mcp = FastMCP("Incident MCP Server")
 
 # -------------------------- Tool to get current time --------------------------
 # this function mimics real functionality of getting current time, but for now it just returns a static string "2026-07-11T02:15:00Z"
-@tool
+@mcp.tool
 def get_current_time() -> dict:
     """
     Always use this tool to get the current time. This ensures that the LLM doesn't hallucinate on the timeframe.
@@ -20,9 +26,8 @@ def get_current_time() -> dict:
     """
     return {"current_time": "2026-07-11T02:15:00Z"}
 
-
 # -------------------------- Tool to identify service from incident query --------------------------
-@tool
+@mcp.tool
 def identify_service(incident_query: str) -> dict:
     """
     This tool identifies the service mentioned in the incident query to determine for which service the incident is being reported. 
@@ -52,20 +57,27 @@ def identify_service(incident_query: str) -> dict:
     return {"service_name": response.service_name, "reason": response.reason}
     
 # -------------------------- Tool to get logs for a given service and timeframe --------------------------
-@tool(args_schema=GetLogsInput)
-def get_logs(service: str, timeframe: dict):
+# @tool(args_schema=GetLogsInput)
+# def get_logs(service: str, timeframe: dict):
+@mcp.tool
+def get_logs(service: Literal["auth-service", "checkout-service", "payments-service", "not related to any service"], timeframe: Timeframe) -> dict:
     """
     This tool retrieves logs for a given service within a specified timeframe. 
     Service can be one of the following: "auth-service", "checkout-service", "payments-service". 
-    The timeframe is a dictionary containing key value pairs for "start_window" and "end_window" in ISO 8601 UTC format.
+    The timeframe is an instance of the Timeframe class containing "start_window" and "end_window" in ISO 8601 UTC format.
 
     Args:
         service (str): The name of the service.
-        timeframe (dict): A dictionary containing the start and end time for the log retrieval.
+        timeframe (Timeframe): An instance of the Timeframe class containing the start and end time for the log retrieval.
 
     Returns:
         dict: A dictionary containing the metadata of the logs requested, including the service name and timeframe, and a list of log entries.
     """
+
+    if service == "not related to any service":
+        return {"error": f"Service not related",
+                "message": f"The incident query is not related to any service. Therefore, logs cannot be retrieved for the given timeframe."
+                }
 
     # extract the start and end date from the timeframe dictionary
     start_window = timeframe.start_window
@@ -75,8 +87,9 @@ def get_logs(service: str, timeframe: dict):
     end_date = end_window.split("T")[0] if end_window else None
 
     # create the name of log files dynamically based on the service name and the start and end date
-    # we might be asked to retrieve logs for a single day or multiple days, so we need to handle both cases
-    dates = [start_date] if start_date == end_date else [start_date, end_date]
+    # we might be asked to retrieve logs spanning several days, so enumerate every date in the
+    # span rather than just the two endpoints (otherwise days in between get silently skipped)
+    dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, end_date)] if start_date and end_date else [start_date or end_date]
 
     log_files = [f"{service}_{date}.jsonl" for date in dates if date]
 
@@ -125,22 +138,29 @@ def get_logs(service: str, timeframe: dict):
         print(f"An error occurred: {e}")
         return {"error": str(e)}
 
-
 # -------------------------- Tool to get metrics for a given service and timeframe --------------------------
-@tool(args_schema=GetMetricsInput)
-def get_metrics(service: str, timeframe: dict):
+# @tool(args_schema=GetMetricsInput)
+# def get_metrics(service: str, timeframe: dict):
+@mcp.tool
+def get_metrics(service: Literal["auth-service", "checkout-service", "payments-service", "not related to any service"], timeframe: Timeframe) -> dict:
+
     """
     This tool retrieves metrics for a given service within a specified timeframe.
     Service can be one of the following: "auth-service", "checkout-service", "payments-service".
-    The timeframe is a dictionary containing key value pairs for "start_window" and "end_window" in ISO 8601 UTC format.
+    The timeframe is an instance of the Timeframe class containing "start_window" and "end_window" in ISO 8601 UTC format.
 
     Args:
         service (str): The name of the service.
-        timeframe (dict): A dictionary containing the start and end time for the metrics retrieval.
+        timeframe (Timeframe): An instance of the Timeframe class containing the start and end time for the metrics retrieval.
 
     Returns:
         dict: A dictionary containing the metadata of the metrics requested, including the service name and timeframe, and a list of metric entries.
     """
+
+    if service == "not related to any service":
+        return {"error": f"Service not related",
+                "message": f"The incident query is not related to any service. Therefore, metrics cannot be retrieved for the given timeframe."
+                }
 
     # extract the start and end date from the timeframe dictionary
     start_window = timeframe.start_window
@@ -150,8 +170,9 @@ def get_metrics(service: str, timeframe: dict):
     end_date = end_window.split("T")[0] if end_window else None
 
     # create the name of metric files dynamically based on the service name and the start and end date
-    # we might be asked to retrieve metrics for a single day or multiple days, so we need to handle both cases
-    dates = [start_date] if start_date == end_date else [start_date, end_date]
+    # we might be asked to retrieve metrics spanning several days, so enumerate every date in the
+    # span rather than just the two endpoints (otherwise days in between get silently skipped)
+    dates = [d.strftime("%Y-%m-%d") for d in pd.date_range(start_date, end_date)] if start_date and end_date else [start_date or end_date]
 
     metric_files = [f"{service}_{date}.csv" for date in dates if date]
 
