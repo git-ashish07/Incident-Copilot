@@ -4,6 +4,85 @@ A running log of changes made to this repo — organized by date and author so a
 
 ---
 
+## 2026-08-02 — Ashish Rathore
+
+### LangGraph agent architecture, short-term memory, and side-panel UI (Tasks 13-15)
+Rebuilt the agent loop on top of LangGraph, added rolling chat-history summarization, and wired a multi-panel Gradio UI that surfaces live context, tool calls, logs, and metrics alongside the chat.
+
+**New entry points**
+- `chat_langgraph.py` — Gradio chat UI driven by the LangGraph state machine; replaces the manual `while` loop in `chat.py`. Highlights:
+  - Per-browser-tab session isolation: `request.session_hash` is used as the LangGraph `thread_id`, so state (chat history, query count) never leaks between users or tabs
+  - Streaming responses via `astream` — each `retrieve`, `llm_call`, and `tools` update is yielded incrementally with a live "Thinking…" status bubble
+  - Four side panels updated after every turn: **Memory** (compressed chat history), **Corpus** (RAG chunks retrieved), **Tool Calls / Logs / Metrics** (structured tool output)
+- `main_langgraph.py` — CLI entry point running the same LangGraph graph as a batch script with a per-run log file (`run_logs/langgraph_<timestamp>.log`)
+
+**Graph nodes (`src/utils/nodes.py`)** — new module:
+- `make_retrieve_node` — runs the RAG pipeline on the raw query, clears the previous turn's message scratchpad (via `RemoveMessage`), resets the iteration counter, and formats the system/human messages including the `{chat_history}` slot
+- `make_llm_call_node` — invokes the tool-bound LLM with up to 3 retries on `BadRequestError`; on a final answer (no tool calls) appends the turn to `chat_history` and increments `query_count`
+- `make_tools_node` — dispatches all tool calls in the LLM's last message via the MCP client and returns a `ToolMessage` per call
+- `give_up` — emits a graceful fallback `AIMessage` when the iteration budget is exhausted
+- `make_router` — routes after every `llm_call` to `"end"` (final answer), `"give_up"` (budget exhausted), or `"tools"` (tool calls pending)
+
+**Short-term memory (`src/utils/memory.py`)** — new module:
+- `summarize_chat_history` — condenses the accumulated `chat_history` list into a single `AIMessage` prose summary using a dedicated LLM call (non-tool-bound instance), so older turns don't consume the full context window
+
+**Memory schema (`docs/memory-schema.md`)** — new Task 14 design document:
+- Specifies three separate stores: short-term (in-memory rolling summary), session transcript log (append-only on-disk buffer), incident-log memory (extracted at session end), and notes memory (durable durable facts) — none of which duplicate the existing RAG corpus
+
+**`AgentState` (`src/utils/models.py`)**:
+- Added `AgentState` (extends LangGraph's `MessagesState`) carrying `incident_query`, `iterations`, `chat_history`, `query_count`, and `retrieved_context` across graph nodes
+
+**Prompt updates (`src/utils/prompts/`)**:
+- `system_prompts.py` — added a `[CHAT HISTORY]` section telling the model to treat the summary as already-confirmed background, not something to re-verify with tools; added `chat_history_summary_prompt` used by `summarize_chat_history`
+- `prompt_template.py` — added a `{chat_history}` slot immediately before `[RETRIEVED CONTEXT]` in the human message template
+
+**Minor fixes**:
+- `src/utils/tools.py` — fixed `get_logs` to serialize timestamps as ISO strings (`date_format="iso"`) instead of epoch integers
+- `src/utils/rag/retrieval_funcs.py` — removed noisy intermediate `print` statements from the retrieval pipeline
+- `pyproject.toml` — added `langgraph>=1.2.9` dependency
+
+**Docs cleanup** — removed stale docs that are no longer maintained or have been superseded: `current-project-working-structure-design.md`, `decision-log.md`, `enterprise-level-architecture-design.md`, `git-workflow.md`, `team-assignments.md`, `team.md`, `week1-task-status.md`
+
+---
+
+## 2026-07-23 — Ashish Rathore
+
+### Integrated MCP server for tool calls
+Registered all four tools as an MCP server so both `main.py` and `chat.py` dispatch tool calls through a single, consistent MCP client rather than calling Python functions directly.
+
+**`src/utils/tools.py`** — wrapped all four tools (`get_current_time`, `identify_service`, `get_logs`, `get_metrics`) in a `fastmcp` `FastMCP` server instance (`mcp`); tools are now exposed as MCP-callable endpoints in addition to being importable Python functions
+
+**`main_mcp.py`** — new standalone entry point that demonstrates the MCP flow end-to-end: opens an MCP client, lists registered tools, converts them to OpenAI function-call schemas, and drives the LLM/tool loop via `ToolMessage` round-trips
+
+**`main.py` / `chat.py`** — updated to use the MCP client (`fastmcp.Client`) for tool dispatch rather than direct function calls; `chat.py` retains streaming and per-run log files from the previous commit
+
+**`src/utils/prompts/prompt_template.py`** — minor template adjustments to align with the MCP-based flow
+
+**`pyproject.toml`** — added `fastmcp` as an explicit dependency; `uv.lock` updated
+
+**`experiments/ashish/code.ipynb`** — added MCP integration experiments notebook
+
+---
+
+## 2026-07-22 — Ashish Rathore
+
+### Fixed tool calling and added streaming to the Gradio UI
+Resolved a tool-call sequencing bug and rewired the Gradio frontend to stream tokens as they arrive.
+
+**`chat.py`** — rewrote the response handler to use Gradio's streaming generator pattern; the assistant's reply now appears token-by-token rather than after the full response is ready; fixed the tool-call dispatch loop so `get_current_time` always runs before `get_logs`/`get_metrics` (the resolved timestamp is a required input to both)
+
+**`src/utils/llm_config.py`** — added `llm_openai_instance` factory alongside the existing Groq factory so callers can choose between providers
+
+**`src/utils/tools.py`** — refactored tool wrappers for correctness; `get_logs` and `get_metrics` now raise clean error responses instead of propagating raw exceptions when a file is missing or a service name is invalid
+
+**`src/utils/prompts/system_prompts.py`** — tightened the `[TOOL RESPONSE]` section so the model synthesises tool output as confirmed fact rather than hedging with "you may want to check the logs"
+
+**`src/utils/prompts/prompt_template.py`** — aligned variable names with the updated tool-call flow
+
+**`src/utils/models.py`** — minor schema fix
+
+---
+
 ## 2026-07-22 — Ashish Rathore
 
 ### Added tool-calling agent loop (Tasks 10-12) and synthetic logs/metrics window

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Literal
+from langgraph.graph import MessagesState
 
 class ServiceExtraction(BaseModel):
     """
@@ -33,3 +34,13 @@ class GetMetricsInput(BaseModel):
     """
     service: Literal["payments-service", "checkout-service", "auth-service"]
     timeframe: Timeframe
+
+class AgentState(MessagesState):
+    """
+    State of the agent, including the current incident query, the number of iterations performed, chat history and query count.
+    """
+    incident_query: str
+    iterations: int
+    chat_history: list 
+    query_count: int
+    retrieved_context: str
