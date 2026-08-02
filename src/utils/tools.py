@@ -123,7 +123,7 @@ def get_logs(service: Literal["auth-service", "checkout-service", "payments-serv
             log_df.drop('request_id', axis=1, inplace=True)
 
             for idx, row in log_df.iterrows():
-                log_rows.append(row.to_json())
+                log_rows.append(row.to_json(date_format="iso"))
 
             source_files.append(file)
 

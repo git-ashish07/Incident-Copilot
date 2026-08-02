@@ -35,7 +35,6 @@ def retrieval_pipeline(query: str, vector_store: Chroma, collection_name: str):
 
     # load all documents from the vector store
     documents = load_documents_from_vector_store(vector_store)
-    print(f"Loaded {len(documents)} documents from vector store '{collection_name}' for retrieval.")
 
     # build the BM25 index and create a lookup dictionary for documents by their IDs
     bm25_index, bm25_doc_ids = build_bm25_index(documents)
@@ -44,7 +43,6 @@ def retrieval_pipeline(query: str, vector_store: Chroma, collection_name: str):
     # run keyword search (BM25) and dense search (bi-encoder) to get candidate pools
     bm25_results = bm25_search(bm25_index, bm25_doc_ids, query, k=10)
     bi_encoder_results = bi_encoder_search(vector_store, query, k=10)
-    print("Ran BM25 and bi-encoder searches.")
 
     # running RRF on the two candidate pools to get a fused top-N list
     fused_results = reciprocal_rank_fusion(
@@ -53,15 +51,12 @@ def retrieval_pipeline(query: str, vector_store: Chroma, collection_name: str):
         k=60,
         top_n=10,   # feed the cross-encoder a slightly wider pool than the final answer needs
     )
-    print("Fused results with RRF")
 
     # create a CrossEncoder instance for re-ranking the fused results
     cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
     # rerank the fused top-N with the cross-encoder to get the final top-3 results
     ce_ranked_results = cross_encoder_rerank(cross_encoder, query, fused_results, doc_lookup, top_n=3)
-    print("Ran cross-encoder re-ranking on fused results.")
-    print("\nTotal number of documents retrieved: ", len(ce_ranked_results))
 
     # retrieve the final top-ranked Document objects based on the cross-encoder's ranking
     final_results = []
