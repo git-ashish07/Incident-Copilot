@@ -41,6 +41,12 @@ def get_incident_rag_template(system_prompt: str) -> ChatPromptTemplate:
         [CHAT HISTORY]
         {chat_history}
 
+        [RECALLED PAST INCIDENTS]
+        {recalled_incidents}
+
+        [RELEVANT NOTES]
+        {relevant_notes}
+
         [RETRIEVED CONTEXT]
         {retrieved_context}
 

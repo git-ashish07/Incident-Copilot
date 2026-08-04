@@ -1,6 +1,7 @@
 # set current directory to the main project directory
 import os
 import json
+import sys
 import logging
 import asyncio
 from datetime import datetime
@@ -33,7 +34,8 @@ from src.utils.rag.ingestion_funcs import ingestion_pipeline
 from src.utils.tools import mcp
 from src.utils.models import AgentState
 from src.utils.nodes import make_retrieve_node, make_llm_call_node, make_tools_node, give_up, make_router
-from src.utils.memory import summarize_chat_history
+from src.utils.memory import summarize_chat_history, run_memory_sweep
+from src.utils.pgdb import save_turn
 
 # importing dotenv to load environment variables
 from dotenv import load_dotenv
@@ -66,6 +68,9 @@ llm = llm_openai_instance(api_key=os.getenv("OPENAI_API_KEY")).bind_tools(tool_s
 
 # plain, non-tool-bound instance for chat_history summarization
 plain_llm = llm_openai_instance(api_key=os.getenv("OPENAI_API_KEY"))
+
+# find and process any sessions not yet scanned for incident-log/notes memory
+asyncio.run(run_memory_sweep(plain_llm))
 
 # these two don't depend on the per-message MCP client, so they're built once, not per message
 retrieve_node = make_retrieve_node(vectordb_instance, incident_rag_prompt_template)
@@ -111,6 +116,25 @@ def _build_memory_markdown(chat_history: list) -> str:
         return "_Nothing in memory yet._"
     lines = [f"**{type(msg).__name__.replace('Message', '')}:** {msg.content}" for msg in chat_history]
     return "\n\n".join(lines)
+
+def _build_long_term_memory_markdown(recalled_incidents: list, relevant_notes: list) -> str:
+    parts = []
+    if recalled_incidents:
+        lines = ["### Recalled Past Incidents"]
+        for inc in recalled_incidents:
+            lines.append(
+                f"- **{inc.get('service')}** (similarity: {inc.get('score'):.2f})\n"
+                f"  - Symptoms: {inc.get('symptoms')}\n"
+                f"  - Diagnosis: {inc.get('diagnosis')}\n"
+                f"  - Status: {inc.get('resolution_status')}"
+            )
+        parts.append("\n".join(lines))
+    if relevant_notes:
+        lines = ["### Relevant Notes"]
+        for n in relevant_notes:
+            lines.append(f"- **[{n.get('category')}]** {n.get('content')} (similarity: {n.get('score'):.2f})")
+        parts.append("\n".join(lines))
+    return "\n\n---\n\n".join(parts) if parts else "_Nothing recalled from long-term memory for this query._"
 
 def _build_corpus_markdown(retrieved_context: str) -> str:
     return retrieved_context if retrieved_context else "_Nothing retrieved yet._"
@@ -169,8 +193,8 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
     logger.info("=" * 60)
     logger.info(f"USER QUERY (thread {thread_id}):\n{message}\n")
 
+    # the user bubble is already in history -- _add_user_message added it before this ran
     ui_messages = list(history) if history else []
-    ui_messages.append({"role": "user", "content": message})
 
     def snapshot() -> list:
         return list(ui_messages)
@@ -181,7 +205,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
     def log_step(line: str) -> None:
         status["content"] += (("\n" if status["content"] else "") + f"- {line}")
 
-    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
     final_answer = None
     final_bubble = None
@@ -189,6 +213,8 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
 
     # accumulated over the whole turn, for the two side panels
     retrieved_context_this_turn = ""
+    recalled_incidents_this_turn = []
+    relevant_notes_this_turn = []
     pending_tool_calls = []       # this round's {name, args} -- paired with results as soon as the tools update arrives
     tool_calls_this_turn = []     # {name, args, result} for every tool call made this turn, across every round
 
@@ -229,7 +255,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
                         final_bubble = {"role": "assistant", "content": ""}
                         ui_messages.append(final_bubble)
                     final_bubble["content"] += chunk.content
-                    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
                 continue
 
             # mode == "updates"
@@ -238,9 +264,11 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
 
                 if node_name == "retrieve":
                     retrieved_context_this_turn = node_output.get("retrieved_context", "")
-                    log_step("Looked into the corpus for relevant runbooks/postmortems")
+                    recalled_incidents_this_turn = node_output.get("recalled_incidents", [])
+                    relevant_notes_this_turn = node_output.get("relevant_notes", [])
+                    log_step("Looked into the corpus for relevant runbooks/postmortems/incidents/notes")
                     status["metadata"]["title"] = "🤔 Thinking..."
-                    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
                 elif node_name == "llm_call" and node_output.get("messages"):
                     last_msg = node_output["messages"][-1]
@@ -253,7 +281,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
                         pending_tool_calls = [{"name": tc["name"], "args": tc["args"]} for tc in last_msg.tool_calls]
                         tool_names = ", ".join(tc["name"] for tc in last_msg.tool_calls)
                         status["metadata"]["title"] = f"🛠️ Using {tool_names}..."
-                        yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                        yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
                     else:
                         # authoritative final text -- overwrite the bubble wholesale, discarding
                         # anything streamed into it, regardless of why it might be wrong
@@ -264,9 +292,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
                         final_bubble["content"] = final_answer
                         status["metadata"]["title"] = "✅ Done"
                         status["metadata"]["status"] = "done"
-                        yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
-
-
+                        yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
                 elif node_name == "tools":
                     tool_msgs = node_output.get("messages", [])
@@ -279,7 +305,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
 
                     if tool_names:
                         log_step(f"Used {tool_names}")
-                        yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                        yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
 
                 elif node_name == "give_up":
                     # give_up never calls the LLM, so no "messages"-mode tokens arrive for it -- add it directly
@@ -287,7 +313,10 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
                     status["metadata"]["title"] = "✅ Done"
                     status["metadata"]["status"] = "done"
                     ui_messages.append({"role": "assistant", "content": final_answer})
-                    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+                    yield snapshot(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip()
+
+        # persist this turn to Postgres : durable record, independent of the in-memory checkpointer
+        await save_turn(thread_id, message, tool_calls_this_turn, final_answer)
 
         # fold check happens after the answer is already streamed back, so it never delays the response
         current_state = await app_graph.aget_state({"configurable": {"thread_id": thread_id}})
@@ -307,6 +336,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
     has_metrics = bool(metrics_rows)
     logs_markdown = _build_logs_markdown(tool_calls_this_turn)
     memory_markdown = _build_memory_markdown(current_state.values.get("chat_history") or [])
+    long_term_memory_markdown = _build_long_term_memory_markdown(recalled_incidents_this_turn, relevant_notes_this_turn)
 
     yield (
         snapshot(),
@@ -315,6 +345,7 @@ async def diagnose_incident(message: str, history: list, request: gr.Request) ->
         gr.update(value=metrics_rows, visible=has_metrics),
         logs_markdown,
         memory_markdown,
+        long_term_memory_markdown,
     )
 
 
@@ -394,12 +425,30 @@ with gr.Blocks(
             gr.Markdown("### Logs")
             logs_panel = gr.Markdown("_No logs retrieved yet._")
 
-        with gr.Tab("🧠 Memory"):
+        with gr.Tab("🧠 Chat Memory"):
             memory_panel = gr.Markdown("_Nothing in memory yet._")
 
-    outputs = [chatbot, corpus_panel, metrics_empty_note, metrics_table, logs_panel, memory_panel]
+        with gr.Tab("📡 Long Term Memory"):
+            long_term_memory_panel = gr.Markdown("_Nothing recalled from long-term memory yet._")
 
-    msg_box.submit(diagnose_incident, inputs=[msg_box, chatbot], outputs=outputs).then(lambda: "", None, msg_box)
+    outputs = [chatbot, corpus_panel, metrics_empty_note, metrics_table, logs_panel, memory_panel, long_term_memory_panel]
+
+
+    query_state = gr.State("")
+
+    def _add_user_message(message: str, history: list):
+        # echoes the user's bubble and clears the textbox immediately, before the
+        # (possibly slow) streaming response even starts -- the actual query text
+        # is stashed in query_state since msg_box itself is about to be cleared
+        history = list(history) if history else []
+        history.append({"role": "user", "content": message})
+        return history, "", message
+
+    msg_box.submit(
+        _add_user_message, inputs=[msg_box, chatbot], outputs=[chatbot, msg_box, query_state]
+    ).then(
+        diagnose_incident, inputs=[query_state, chatbot], outputs=outputs
+    )
 
     example_state = gr.State("")
 
@@ -407,8 +456,11 @@ with gr.Blocks(
         return evt.value["text"]
 
     chatbot.example_select(_example_text, None, example_state).then(
-        diagnose_incident, inputs=[example_state, chatbot], outputs=outputs
+        _add_user_message, inputs=[example_state, chatbot], outputs=[chatbot, msg_box, query_state]
+    ).then(
+        diagnose_incident, inputs=[query_state, chatbot], outputs=outputs
     )
+
 
 
 
