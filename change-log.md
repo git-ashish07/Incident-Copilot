@@ -4,6 +4,49 @@ A running log of changes made to this repo — organized by date and author so a
 
 ---
 
+## 2026-08-05 — Ashish Rathore
+
+### Long-term memory: Postgres session storage, incident-log extraction, and notes memory (Tasks 15-16)
+Implemented the full long-term memory loop: every turn is durably persisted to Postgres; at startup, a memory sweep scans unprocessed sessions and extracts incident records and durable notes into ChromaDB; both are recalled by vector similarity on every query and injected into the prompt.
+
+**Postgres session storage (`src/utils/pgdb.py`)** — new module:
+- Three tables: `sessions`, `messages`, and `session_memory_status` (tracks per-session incident/notes processing state)
+- `save_turn()` — called after every agent turn to append user query, tool results, and final answer to Postgres
+- `get_unprocessed_sessions()` / `get_session_messages()` / `mark_session_processed()` — used by the memory sweep to find and process sessions not yet scanned
+- Uses sync `psycopg` via `asyncio.to_thread()` — async psycopg is incompatible with uvicorn's proactor event loop on Windows; the thread wrapper has no such restriction
+- Schema creation is one-time setup: `uv run python -m src.utils.pgdb`; the app itself only reads/writes, never creates tables
+- `pyproject.toml` — added `psycopg[binary,pool]>=3.3.4`
+
+**Long-term memory extraction (`src/utils/memory.py`)**:
+- `extract_incident_memory()` — structured LLM call (`IncidentExtraction`) that identifies distinct incidents in a session transcript and stores each as a ChromaDB document in the `incident_memory` collection, keyed with service, symptoms, steps taken, diagnosis, and resolution status
+- `extract_notes_memory()` — structured LLM call (`NotesExtraction`) that reads existing notes and the session transcript, then adds new notes or updates existing ones (facts, preferences, corrections, patterns) in the `agent_notes` collection
+- `run_memory_sweep()` — runs at app startup; finds all Postgres sessions not yet processed and runs both extractors against them; gates re-runs via `mark_session_processed`
+- `recall_from_collection()` — synchronous vector-similarity search against either memory collection; filters results by a similarity threshold (default 0.7, top-2) and returns metadata-enriched dicts for prompt injection
+
+**Pydantic schemas (`src/utils/models.py`)**:
+- `IncidentRecord` / `IncidentExtraction` — structured output schema for incident extraction (service, symptoms, steps_taken, diagnosis, resolution_status)
+- `NoteAction` / `NotesExtraction` — structured output schema for notes extraction (action `add`/`update`, category, content, service)
+- `AgentState` — added `recalled_incidents: list` and `relevant_notes: list` fields
+
+**Prompts (`src/utils/prompts/system_prompts.py`)**:
+- Added `[RECALLED PAST INCIDENTS]` and `[RELEVANT NOTES]` sections to the incident response system prompt
+- Added `incident_extraction_prompt` and `notes_extraction_prompt` used by the two extractors
+
+**Prompt template (`src/utils/prompts/prompt_template.py`)**: added `{recalled_incidents}` and `{relevant_notes}` slots before `[RETRIEVED CONTEXT]`
+
+**Retrieve node (`src/utils/nodes.py`)**:
+- Calls `recall_from_collection` for both memory collections on every turn and passes results to `_format_recalled_incidents` / `_format_relevant_notes` before prompt formatting
+- Returns `recalled_incidents` and `relevant_notes` in the state update so the UI side panel can render them
+
+**Gradio UI (`chat_langgraph.py`)**:
+- Added `_add_user_message` sync pre-step that echoes the user bubble and clears the textbox immediately before the streaming response starts (fixes the visible input lag); message is stashed in `query_state` so the async step still has it
+- Added "📡 Long Term Memory" panel tab with `_build_long_term_memory_markdown` rendering recalled incidents and relevant notes
+- Calls `save_turn` after each agent turn to persist to Postgres
+- Calls `run_memory_sweep` at startup to catch any unprocessed sessions from prior runs
+- Tab renamed from "🧠 Memory" to "🧠 Chat Memory" to distinguish short-term from long-term
+
+---
+
 ## 2026-08-02 — Ashish Rathore
 
 ### LangGraph agent architecture, short-term memory, and side-panel UI (Tasks 13-15)

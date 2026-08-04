@@ -8,13 +8,38 @@ from langchain_core.messages import ToolMessage, AIMessage, HumanMessage, Remove
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from src.utils.models import AgentState
 from src.utils.rag.retrieval_funcs import retrieval_pipeline
+from src.utils.memory import recall_from_collection
 
 
 def _format_chat_history(chat_history: list | None) -> str:
+    """
+    Format the chat history into a string representation for use in prompts.
+    """
     # chat_history holds real message objects (query/tool_response/final_answer), render them as plain text for the prompt
     if not chat_history:
         return "(no prior conversation)"
     return "\n".join(f"{type(msg).__name__.replace('Message', '')}: {msg.content}" for msg in chat_history)
+
+def _format_recalled_incidents(incidents: list[dict]) -> str:
+    """
+    Format a list of recalled incidents into a string representation for use in prompts.
+    """
+    if not incidents:
+        return "(none found)"
+    return "\n".join(
+        f"- Service: {inc.get('service')} | Symptoms: {inc.get('symptoms')} | "
+        f"Diagnosis: {inc.get('diagnosis')} | Status: {inc.get('resolution_status')} "
+        f"(similarity: {inc.get('score'):.2f})"
+        for inc in incidents
+    )
+
+def _format_relevant_notes(notes: list[dict]) -> str:
+    """
+    Format a list of relevant notes into a string representation for use in prompts.
+    """
+    if not notes:
+        return "(none found)"
+    return "\n".join(f"- [{n.get('category')}] {n.get('content')}" for n in notes)
 
 # the reason to have nodes within functions is to inject dependencies through these functions into the node
 def make_retrieve_node(vectordb_instance, prompt_template):
@@ -50,17 +75,25 @@ def make_retrieve_node(vectordb_instance, prompt_template):
         # fallback for turn 1, when there's no prior conversation yet
         chat_history_text = _format_chat_history(state.get("chat_history"))
 
+        # long-term memory recall -- separate from chat_history, keyed by similarity not by session
+        recalled_incidents = recall_from_collection(state["incident_query"], "incident_memory")
+        relevant_notes = recall_from_collection(state["incident_query"], "agent_notes")
+
         new_messages = prompt_template.format_messages(
             incident_query = state["incident_query"],
             retrieved_context = retrieved_context,
-            chat_history = chat_history_text
+            chat_history = chat_history_text,
+            recalled_incidents = _format_recalled_incidents(recalled_incidents),
+            relevant_notes = _format_relevant_notes(relevant_notes),
         )
 
         # wipe last turn's messages first, messages is only a scratchpad for current turn's tool loop
         return {
             "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES)] + new_messages,
             "iterations": 0,
-            "retrieved_context": retrieved_context
+            "retrieved_context": retrieved_context,
+            "recalled_incidents": recalled_incidents,
+            "relevant_notes": relevant_notes,
         }
 
     return retrieve

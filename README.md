@@ -8,7 +8,8 @@ An AI-powered incident-response copilot that helps on-call engineers triage prod
 
 - **RAG over runbooks & postmortems** — retrieves relevant documented steps and cites the source, never improvises
 - **Log & metrics querying** — calls a log/metrics tool to pull data for a given service and timeframe
-- **Memory** — recalls similar past incidents and how they were resolved
+- **Short-term memory** — rolls up prior turns in the session into a condensed prose summary so older context is never hard-dropped
+- **Long-term memory** — at startup, scans unprocessed sessions in Postgres and extracts incident records and durable notes into ChromaDB; recalled by vector similarity on every query
 - **GitHub issue creation** — opens a tracked issue with the triage summary via a tool call
 - **Guardrails** — refuses to execute any deploy, rollback, or production-mutating action; drafts steps for a human to approve and run
 
@@ -20,8 +21,8 @@ An AI-powered incident-response copilot that helps on-call engineers triage prod
 |------|-------------|
 | [docs/requirements.md](docs/requirements.md) | Objective, user persona, sample queries, constraints, and guardrail requirements |
 | [docs/tasks.md](docs/tasks.md) | 4-week build plan with definitions of done and evidence of completion |
-| [docs/team.md](docs/team.md) | Team roster with roles, tech stacks, and requirements confirmation |
-| [docs/team-assignments.md](docs/team-assignments.md) | Task ownership and comments per week |
+| [docs/tools.md](docs/tools.md) | Tool specs: inputs, output shape, and error cases for all MCP tools |
+| [docs/memory-schema.md](docs/memory-schema.md) | Memory design: short-term, incident-log, and notes store schemas |
 
 ---
 
@@ -35,39 +36,46 @@ An AI-powered incident-response copilot that helps on-call engineers triage prod
 
 ```
 incident-copilot/
-├── main.py                        # Entry point
+├── chat_langgraph.py              # Gradio UI — LangGraph agent with streaming + side panels
+├── main_langgraph.py              # CLI entry point — LangGraph agent (batch / logging)
+├── main_mcp.py                    # CLI entry point — raw MCP tool-call loop (reference)
+├── main.py                        # Legacy CLI entry point
 ├── pyproject.toml                 # Project config and dependencies
 ├── uv.lock                        # Locked dependency versions
 ├── .env-example                   # Example environment variables
-├── .gitignore
-├── .python-version
 ├── src/
 │   ├── data/
-│   │   ├── data_overview.md             # Plain-language guide to everything below
+│   │   ├── data_overview.md             # Plain-language guide to all data assets
 │   │   ├── sample_incident_queries.py   # Sample queries for dry runs
 │   │   ├── incidents/
-│   │   │   └── incidents.json           # Past-incident records + live incident context
-│   │   ├── metrics/                     # Synthetic time-series metrics (CSV)
-│   │   ├── logs/                        # Synthetic raw log excerpts
-│   │   └── corpus/                      # RAG corpus (ingested in Week 1, Task 6-7)
-│   │       ├── runbooks/                # Step-by-step incident-response docs
-│   │       ├── postmortems/             # Past-incident write-ups
-│   │       ├── code_docs/               # Service architecture notes
-│   │       └── sources.md               # Source list + sample-query coverage
-│   ├── llm_funcs/
-│   │   └── llm_config.py                # LLM instance configuration
-│   ├── prompts/
-│   │   ├── system_prompts.py            # System prompt definitions
-│   │   └── prompt_template.py           # Prompt template builder
-│   └── utils/                           # Shared utility helpers
+│   │   │   └── incidents.json           # Structured past-incident records
+│   │   ├── metrics/                     # Synthetic per-day time-series metrics (CSV)
+│   │   ├── logs/                        # Synthetic per-day raw logs (JSONL)
+│   │   └── corpus/                      # RAG corpus — runbooks, postmortems, code docs
+│   │       ├── runbooks/
+│   │       ├── postmortems/
+│   │       ├── code_docs/
+│   │       └── sources.md
+│   └── utils/
+│       ├── llm_config.py                # LLM factory (Groq + OpenAI)
+│       ├── models.py                    # Pydantic schemas + AgentState
+│       ├── tools.py                     # MCP tool definitions (get_logs, get_metrics, …)
+│       ├── nodes.py                     # LangGraph node factories
+│       ├── memory.py                    # Short-term summarizer + long-term memory sweep
+│       ├── pgdb.py                      # Postgres helpers for durable session storage
+│       ├── prompts/
+│       │   ├── system_prompts.py
+│       │   └── prompt_template.py
+│       └── rag/
+│           ├── ingestion_funcs.py
+│           └── retrieval_funcs.py
 ├── experiments/
-│   └── [member-name]/
-│       └── code.ipynb                   # Experimentation notebook
+│   └── code.ipynb
 └── docs/
-    ├── requirements.md            # Full project requirements and sample queries
-    ├── tasks.md                   # 4-week task plan (32 tasks)
-    ├── team.md                    # Team roster, roles, and agreed tech stack
-    └── team-assignments.md        # Per-task ownership and status by week
+    ├── requirements.md
+    ├── tasks.md
+    ├── tools.md                   # MCP tool specs
+    └── memory-schema.md           # Memory store design
 ```
 
 ---
@@ -101,15 +109,15 @@ uv add <package-name>
 
 ## Tech Stack
 
-| Area             | Technology              |
-|------------------|-------------------------|
-| Language         | Python 3.11+            |
-| LLM / Model      | Groq Cloud              |
-| RAG / Vector Store | ChromaDB / FAISS / Qdrant |
-| UI               | Gradio                  |
-| Framework        | TBD                     |
-| Memory           | TBD                     |
-| MCP / Tools      | TBD                     |
-| Guardrails       | TBD                     |
-| Caching          | TBD                     |
-| Observability    | TBD                     |
+| Area               | Technology                                      |
+|--------------------|-------------------------------------------------|
+| Language           | Python 3.11+                                    |
+| LLM / Model        | OpenAI (primary), Groq (secondary)              |
+| Agent Framework    | LangGraph (`StateGraph` + `InMemorySaver`)      |
+| RAG / Vector Store | ChromaDB + BM25 + cross-encoder re-rank         |
+| Tools / MCP        | FastMCP (`fastmcp`) — tools exposed as MCP server |
+| Short-term Memory  | LangGraph in-memory checkpointer (rolling summary) |
+| Long-term Memory   | ChromaDB (`incident_memory`, `agent_notes`) + PostgreSQL (session transcript log) |
+| UI                 | Gradio                                          |
+| Guardrails         | TBD                                             |
+| Observability      | Per-run log files (`run_logs/`)                 |
